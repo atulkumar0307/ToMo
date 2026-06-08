@@ -1,0 +1,294 @@
+{
+  "info": {
+    "name": "ToMo API",
+    "description": "ToMo Backend API — grouped by /user and /admin",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "adminAccessToken", "value": "" },
+    { "key": "adminRefreshToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "user",
+      "item": [
+        {
+          "name": "auth",
+          "item": [
+            {
+              "name": "Send OTP",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"9999999999\",\n  \"action\": \"LOGIN\"\n}"
+                },
+                "url": "{{baseUrl}}/api/user/auth/send-otp"
+              }
+            },
+            {
+              "name": "Verify OTP",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"9999999999\",\n  \"otp\": \"000000\",\n  \"action\": \"LOGIN\"\n}"
+                },
+                "url": "{{baseUrl}}/api/user/auth/verify-otp"
+              }
+            },
+            {
+              "name": "Refresh Token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/user/auth/refresh-token"
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/user/auth/logout"
+              }
+            },
+            {
+              "name": "Get Me",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+                },
+                "url": "{{baseUrl}}/api/user/auth/me"
+              }
+            }
+          ]
+        },
+        {
+          "name": "profile",
+          "item": [
+            {
+              "name": "Get Profile",
+              "request": {
+                "method": "GET",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+                },
+                "url": "{{baseUrl}}/api/user/profile"
+              }
+            },
+            {
+              "name": "Update Profile",
+              "request": {
+                "method": "PATCH",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "fullName", "value": "Atul Kumar", "type": "text" },
+                    { "key": "gender", "value": "MALE", "type": "text" },
+                    { "key": "dateOfBirth", "value": "1998-05-15", "type": "text" },
+                    { "key": "bio", "value": "Hello from ToMo", "type": "text" },
+                    { "key": "profileImage", "type": "file", "src": [] }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/user/profile"
+              }
+            }
+          ]
+        },
+        {
+          "name": "verification",
+          "item": [
+            {
+              "name": "Upload Selfie Video",
+              "request": {
+                "method": "POST",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "verificationVideo", "type": "file", "src": [] }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/user/verification/video"
+              }
+            },
+            {
+              "name": "Get Verification Status",
+              "request": {
+                "method": "GET",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+                },
+                "url": "{{baseUrl}}/api/user/verification/video"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "admin",
+      "item": [
+        {
+          "name": "auth",
+          "item": [
+            {
+              "name": "Register",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@tomo.com\",\n  \"password\": \"securepass123\",\n  \"fullName\": \"Admin User\"\n}"
+                },
+                "url": "{{baseUrl}}/api/admin/register"
+              }
+            },
+            {
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@tomo.com\",\n  \"password\": \"securepass123\"\n}"
+                },
+                "url": "{{baseUrl}}/api/admin/login"
+              }
+            },
+            {
+              "name": "Refresh Token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{adminRefreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/admin/refresh-token"
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{adminRefreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/admin/logout"
+              }
+            }
+          ]
+        },
+        {
+          "name": "users",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "method": "GET",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/admin/users?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "admin", "users"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Block User",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isBlocked\": true\n}"
+                },
+                "url": "{{baseUrl}}/api/admin/users/:userId/block"
+              }
+            },
+            {
+              "name": "Update User Profile",
+              "request": {
+                "method": "PATCH",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "fullName", "value": "Updated Name", "type": "text" },
+                    { "key": "gender", "value": "MALE", "type": "text" },
+                    { "key": "isProfileCompleted", "value": "true", "type": "text" }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/admin/users/:userId/profile"
+              }
+            }
+          ]
+        },
+        {
+          "name": "verification",
+          "item": [
+            {
+              "name": "Review Verification Video",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"APPROVED\"\n}"
+                },
+                "url": "{{baseUrl}}/api/admin/verification-videos/:verificationId"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

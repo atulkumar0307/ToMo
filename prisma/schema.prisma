@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OtpAction {
+  LOGIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Counter {
+  id    String @id
+  value Int    @default(0)
+}
+
+model User {
+  id                 String         @id @default(uuid())
+  uid                Int            @unique
+  mobile             String         @unique
+  isBlocked          Boolean        @default(false)
+  fullName           String?
+  profileImagePath   String?
+  gender             Gender?
+  dateOfBirth        DateTime?      @db.Date
+  bio                String?
+  isProfileCompleted Boolean        @default(false)
+  isProfileVerified  Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  refreshTokens       RefreshToken[]
+  verificationVideos  VerificationVideo[]
+
+  @@index([mobile])
+}
+
+model VerificationVideo {
+  id        String             @id @default(uuid())
+  userId    String
+  videoPath String
+  status    VerificationStatus @default(PENDING)
+  remark    String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([status])
+}
+
+model Otp {
+  id        String    @id @default(uuid())
+  mobile    String
+  otp       String
+  action    OtpAction
+  expiresAt DateTime
+  isUsed    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([mobile, action, isUsed, expiresAt])
+  @@index([mobile, createdAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model Admin {
+  id            String              @id @default(uuid())
+  email         String              @unique
+  passwordHash  String
+  fullName      String
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  refreshTokens AdminRefreshToken[]
+
+  @@index([email])
+}
+
+model AdminRefreshToken {
+  id        String   @id @default(uuid())
+  adminId   String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([token])
+  @@index([expiresAt])
+}
