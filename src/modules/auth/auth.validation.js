@@ -70,9 +70,18 @@ const validateRefreshToken = (body) => {
 
 const normalizeAction = (action) => action.trim().toUpperCase();
 
+const validateOptionalMobile = (mobile) => {
+  if (mobile === undefined || mobile === null) {
+    return null;
+  }
+
+  return validateMobile(mobile);
+};
+
 module.exports = {
   validateSendOtp,
   validateVerifyOtp,
   validateRefreshToken,
+  validateOptionalMobile,
   normalizeAction,
 };

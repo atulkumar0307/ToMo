@@ -39,9 +39,11 @@ model User {
   gender             Gender?
   dateOfBirth        DateTime?      @db.Date
   bio                String?
-  isProfileCompleted Boolean        @default(false)
-  isProfileVerified  Boolean        @default(false)
-  createdAt          DateTime       @default(now())
+  isProfileCompleted        Boolean        @default(false)
+  isProfileVerified         Boolean        @default(false)
+  fullNameUpdatedAt         DateTime?
+  dateOfBirthUpdatedAt      DateTime?
+  createdAt                 DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   refreshTokens       RefreshToken[]
   verificationVideos  VerificationVideo[]

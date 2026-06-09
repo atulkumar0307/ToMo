@@ -5,8 +5,10 @@ const {
   validateBio,
   buildProfileUpdateData,
 } = require('../profile/profile.validation');
+const { validateOptionalMobile } = require('../auth/auth.validation');
 
 const UPDATABLE_PROFILE_FIELDS = [
+  'mobile',
   'fullName',
   'gender',
   'dateOfBirth',
@@ -100,6 +102,7 @@ const validateAdminUpdateProfile = (body, file) => {
   }
 
   const checks = [
+    validateOptionalMobile(body.mobile),
     validateName(body.fullName, 'Full name'),
     validateGender(body.gender),
     validateDateOfBirth(body.dateOfBirth),
@@ -113,6 +116,10 @@ const validateAdminUpdateProfile = (body, file) => {
 
 const buildAdminProfileUpdateData = (body, file) => {
   const data = buildProfileUpdateData(body, file);
+
+  if (body.mobile !== undefined) {
+    data.mobile = body.mobile.trim();
+  }
 
   if (body.isProfileCompleted !== undefined) {
     data.isProfileCompleted = parseBooleanField(body.isProfileCompleted);

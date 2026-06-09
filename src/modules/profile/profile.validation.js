@@ -81,9 +81,22 @@ const validateBio = (value) => {
 
 const UPDATABLE_FIELDS = ['fullName', 'gender', 'dateOfBirth', 'bio'];
 
+const validateMobileNotAllowed = (body) => {
+  if (body.mobile !== undefined) {
+    return 'Mobile number cannot be changed';
+  }
+
+  return null;
+};
+
 const validateUpdateProfile = (body, file) => {
   if (!body || typeof body !== 'object') {
     return 'Request body is required';
+  }
+
+  const mobileError = validateMobileNotAllowed(body);
+  if (mobileError) {
+    return mobileError;
   }
 
   const hasUpdate =
@@ -134,6 +147,7 @@ module.exports = {
   validateGender,
   validateDateOfBirth,
   validateBio,
+  validateMobileNotAllowed,
   validateUpdateProfile,
   buildProfileUpdateData,
 };

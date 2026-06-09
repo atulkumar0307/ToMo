@@ -10,6 +10,8 @@ const USER_SELECT = {
   bio: true,
   isProfileCompleted: true,
   isProfileVerified: true,
+  fullNameUpdatedAt: true,
+  dateOfBirthUpdatedAt: true,
   createdAt: true,
   updatedAt: true,
 };

@@ -76,6 +76,17 @@ const setUserBlockStatus = async (userId, isBlocked) => {
 const updateUserProfile = async (userId, data) => {
   await findUserOrThrow(userId);
 
+  if (data.mobile) {
+    const existingUser = await prisma.user.findUnique({
+      where: { mobile: data.mobile },
+      select: { id: true },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      throw new AppError('Mobile number already in use', 409);
+    }
+  }
+
   const user = await prisma.user.update({
     where: { id: userId },
     data,
