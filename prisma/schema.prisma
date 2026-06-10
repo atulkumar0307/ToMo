@@ -24,6 +24,35 @@ enum VerificationStatus {
   REJECTED
 }
 
+enum ActivityCategory {
+  COFFEE
+  WALKING
+  SPORTS
+  GYM
+  STUDY
+  COWORKING
+  DINING
+  TRAVEL
+  ENTERTAINMENT
+  OTHER
+}
+
+enum ActivityStatus {
+  PUBLISHED
+  DELETED
+  CANCELLED
+  ACTIVE
+  COMPLETED
+}
+
+enum ParticipantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  EXPIRED
+}
+
 model Counter {
   id    String @id
   value Int    @default(0)
@@ -45,10 +74,58 @@ model User {
   dateOfBirthUpdatedAt      DateTime?
   createdAt                 DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
-  refreshTokens       RefreshToken[]
-  verificationVideos  VerificationVideo[]
+  refreshTokens         RefreshToken[]
+  verificationVideos    VerificationVideo[]
+  hostedActivities      Activity[]            @relation("HostedActivities")
+  activityParticipants  ActivityParticipant[]
 
   @@index([mobile])
+}
+
+model Activity {
+  id              String           @id @default(uuid())
+  hostId          String
+  title           String
+  description     String
+  category        ActivityCategory
+  locationName    String
+  address         String?
+  city            String?
+  latitude        Float
+  longitude       Float
+  startTime       DateTime
+  endTime         DateTime
+  maxParticipants Int
+  status          ActivityStatus   @default(PUBLISHED)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  host            User             @relation("HostedActivities", fields: [hostId], references: [id], onDelete: Cascade)
+  participants    ActivityParticipant[]
+
+  @@index([hostId])
+  @@index([status, startTime])
+  @@index([category])
+  @@index([city])
+}
+
+model ActivityParticipant {
+  id         String            @id @default(uuid())
+  activityId String
+  userId     String
+  status     ParticipantStatus @default(PENDING)
+  isHost     Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  activity   Activity          @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, userId])
+  @@index([activityId, status])
+  @@index([userId])
 }
 
 model VerificationVideo {

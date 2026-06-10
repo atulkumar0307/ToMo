@@ -51,13 +51,19 @@ src/
 /api/user/auth/...
 /api/user/profile/...
 /api/user/verification/...
+/api/user/activities/...
 
 /api/admin/auth/...        (register, login, refresh-token, logout)
 /api/admin/users/...
 /api/admin/verification-videos/...
 ```
 
-Import the Postman collection from `postman/ToMo-API.postman_collection.json` — folders: **user** → auth / profile / verification, **admin** → auth / users / verification.
+Import Postman files from `postman/`:
+- `ToMo-API.postman_collection.json` — all APIs with docs and auto-save token scripts
+- `ToMo-Local.postman_environment.json` — localhost
+- `ToMo-Production.postman_environment.json` — Render
+
+Postman → **Import** → select files → choose environment (top-right).
 
 ## API Endpoints
 
@@ -73,6 +79,7 @@ Import the Postman collection from `postman/ToMo-API.postman_collection.json` �
 | PATCH  | `/api/user/profile`           | Bearer   |
 | POST   | `/api/user/verification/video`| Bearer   |
 | GET    | `/api/user/verification/video`| Bearer   |
+| POST   | `/api/user/activities`        | Bearer   |
 | POST   | `/api/admin/register`    | No       |
 | POST   | `/api/admin/login`       | No       |
 | POST   | `/api/admin/refresh-token` | No     |
@@ -127,6 +134,30 @@ Uploaded images are stored under `uploads/profiles/` and exposed at `/uploads/pr
 - **remark:** set by admin when rejecting (shown to user on status check)
 
 `GET /api/user/verification/video` — returns the latest verification submission for the logged-in user.
+
+### Create activity
+
+`POST /api/user/activities` — create a published activity. Requires completed profile.
+
+```json
+{
+  "title": "Coffee after work",
+  "description": "Quick coffee near office. Casual chat welcome.",
+  "category": "COFFEE",
+  "locationName": "Blue Tokai Saket",
+  "address": "Select Citywalk, Saket",
+  "city": "Delhi",
+  "latitude": 28.5244,
+  "longitude": 77.2066,
+  "startTime": "2026-06-15T17:30:00.000Z",
+  "endTime": "2026-06-15T18:30:00.000Z",
+  "maxParticipants": 4
+}
+```
+
+Categories: `COFFEE` | `WALKING` | `SPORTS` | `GYM` | `STUDY` | `COWORKING` | `DINING` | `TRAVEL` | `ENTERTAINMENT` | `OTHER`
+
+Host is auto-added as the first approved participant (`approvedCount: 1`).
 
 ### Admin APIs
 
