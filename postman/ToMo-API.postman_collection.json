@@ -1,43 +1,79 @@
 {
   "info": {
-    "_postman_id": "tomo-api-collection",
-    "name": "ToMo API",
-    "description": "# ToMo Backend API\n\nBase URL: `{{baseUrl}}`\n\n## Structure\n- **user** → `/api/user/auth`, `/api/user/profile`, `/api/user/verification`\n- **admin** → `/api/admin/*`\n\n## Collection variables\n| Variable | Description |\n|----------|-------------|\n| `baseUrl` | Server root e.g. `http://localhost:3000` or `https://tomo-utug.onrender.com` |\n| `userBaseUrl` | `{{baseUrl}}/api/user` |\n| `adminBaseUrl` | `{{baseUrl}}/api/admin` |\n| `userAccessToken` | Auto-set after Verify OTP |\n| `userRefreshToken` | Auto-set after Verify OTP |\n| `adminAccessToken` | Auto-set after Admin Login |\n| `adminRefreshToken` | Auto-set after Admin Login |\n| `userId` | Set manually for admin routes |\n| `verificationId` | Set manually for admin review |\n\n## User auth flow\n1. Send OTP → 2. Verify OTP (saves tokens) → 3. Use Bearer `{{userAccessToken}}`\n\n## Admin auth flow\n1. Register (once) → 2. Login (saves tokens) → 3. Use Bearer `{{adminAccessToken}}`\n\n## Dev OTP\nDefault: `000000`\n\n## Profile update rules (user)\n- **Not verified:** all fields except mobile\n- **Verified:** gender locked; fullName & dateOfBirth once per 14 days each; bio & profileImage always allowed\n- **mobile:** never changeable by user\n\n## Verification video\n- 5–10 seconds, MP4/WebM/MOV, max 50MB\n- Field name: `verificationVideo`",
+    "_postman_id": "tomo-api-collection-v2",
+    "name": "ToMo API (Complete)",
+    "description": "# ToMo Backend — Complete API Collection\n\nImport this file **and** an environment file (`ToMo-Local` or `ToMo-Production`) from the same `postman/` folder.\n\n## Quick start\n\n### User flow\n1. **Send OTP** → **Verify OTP** (tokens auto-saved)\n2. **Update Profile** → sets `isProfileCompleted`\n3. **Upload Selfie Video** → **Admin Approve** → `isProfileVerified`\n4. **Create Activity** → lifecycle endpoints\n\n### Admin flow\n1. **Register** (once) → **Login** (tokens auto-saved)\n2. **List Users** (auto-saves `userId` + `verificationId`)\n3. **Approve/Reject Verification**\n\n## Variables (auto-managed)\n| Variable | Set by |\n|----------|--------|\n| `userAccessToken` / `userRefreshToken` | Verify OTP, Refresh Token |\n| `adminAccessToken` / `adminRefreshToken` | Admin Login, Refresh Token |\n| `userId` | List Users, Get Me |\n| `verificationId` | List Users, Get Verification Status |\n| `activityId` | Create Activity |\n| `activityStartTime` / `activityEndTime` | Pre-request on create/update activity |\n\n## Dev OTP\nDefault: `{{devOtp}}` = `000000`\n\n## Response shape\n**Success:** `{ \"success\": true, ...data }`\n**Error:** `{ \"success\": false, \"message\": \"...\" }`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:3000" },
     { "key": "userBaseUrl", "value": "{{baseUrl}}/api/user" },
     { "key": "adminBaseUrl", "value": "{{baseUrl}}/api/admin" },
+    { "key": "testMobile", "value": "9999999999" },
+    { "key": "devOtp", "value": "000000" },
     { "key": "userAccessToken", "value": "" },
     { "key": "userRefreshToken", "value": "" },
     { "key": "adminAccessToken", "value": "" },
     { "key": "adminRefreshToken", "value": "" },
     { "key": "userId", "value": "" },
-    { "key": "verificationId", "value": "" }
+    { "key": "verificationId", "value": "" },
+    { "key": "activityId", "value": "" },
+    { "key": "activityStartTime", "value": "" },
+    { "key": "activityEndTime", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('activityStartTime')) {",
+          "  const start = new Date(Date.now() + 45 * 60 * 1000);",
+          "  const end = new Date(start.getTime() + 60 * 60 * 1000);",
+          "  pm.collectionVariables.set('activityStartTime', start.toISOString());",
+          "  pm.collectionVariables.set('activityEndTime', end.toISOString());",
+          "}"
+        ]
+      }
+    }
   ],
   "item": [
     {
       "name": "health",
+      "description": "Public health check — no authentication required.",
       "item": [
         {
           "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));",
+                  "pm.test('Has status field', () => pm.expect(pm.response.json().status).to.be.oneOf(['ok', 'degraded']));"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/health",
-            "description": "No auth. Returns server and database status."
+            "description": "## GET /health\n\n**Auth:** None\n\n**Response:**\n```json\n{\n  \"success\": true,\n  \"status\": \"ok\",\n  \"timestamp\": \"...\",\n  \"database\": \"connected\"\n}\n```"
           },
           "response": []
         }
-      ],
-      "description": "Public health endpoint"
+      ]
     },
     {
       "name": "user",
+      "description": "User APIs under `/api/user`. Most routes require Bearer `{{userAccessToken}}`.",
       "item": [
         {
           "name": "auth",
+          "description": "OTP login and JWT session management.",
           "item": [
             {
               "name": "Send OTP",
@@ -45,11 +81,11 @@
                 {
                   "listen": "test",
                   "script": {
+                    "type": "text/javascript",
                     "exec": [
-                      "pm.test('Status is 200', () => pm.response.to.have.status(200));",
-                      "pm.test('Success true', () => pm.expect(pm.response.json().success).to.eql(true));"
-                    ],
-                    "type": "text/javascript"
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));"
+                    ]
                   }
                 }
               ],
@@ -58,10 +94,10 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"mobile\": \"9999999999\",\n  \"action\": \"LOGIN\"\n}"
+                  "raw": "{\n  \"mobile\": \"{{testMobile}}\",\n  \"action\": \"LOGIN\"\n}"
                 },
                 "url": "{{userBaseUrl}}/auth/send-otp",
-                "description": "Send OTP to mobile. Dev OTP: `000000`. Blocked users get 403."
+                "description": "## POST /api/user/auth/send-otp\n\n**Auth:** None\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `mobile` | Yes | 10-digit Indian mobile, starts 6–9 (`^[6-9]\\d{9}$`) |\n| `action` | Yes | `LOGIN` only |\n\n### Errors\n- `400` — validation failed\n- `403` — user is blocked"
               },
               "response": []
             },
@@ -71,15 +107,18 @@
                 {
                   "listen": "test",
                   "script": {
+                    "type": "text/javascript",
                     "exec": [
                       "if (pm.response.code === 200) {",
                       "  const json = pm.response.json();",
                       "  if (json.accessToken) pm.collectionVariables.set('userAccessToken', json.accessToken);",
                       "  if (json.refreshToken) pm.collectionVariables.set('userRefreshToken', json.refreshToken);",
+                      "  if (json.user && json.user.uid) pm.collectionVariables.set('userUid', String(json.user.uid));",
                       "}",
-                      "pm.test('Status is 200', () => pm.response.to.have.status(200));"
-                    ],
-                    "type": "text/javascript"
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has accessToken', () => pm.expect(pm.response.json().accessToken).to.be.a('string'));",
+                      "pm.test('User has uid', () => pm.expect(pm.response.json().user.uid).to.be.a('number'));"
+                    ]
                   }
                 }
               ],
@@ -88,10 +127,10 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"mobile\": \"9999999999\",\n  \"otp\": \"000000\",\n  \"action\": \"LOGIN\"\n}"
+                  "raw": "{\n  \"mobile\": \"{{testMobile}}\",\n  \"otp\": \"{{devOtp}}\",\n  \"action\": \"LOGIN\"\n}"
                 },
                 "url": "{{userBaseUrl}}/auth/verify-otp",
-                "description": "Returns accessToken, refreshToken, and user: { uid, isBlocked, isProfileCompleted, isProfileVerified }. Tokens auto-saved to collection variables."
+                "description": "## POST /api/user/auth/verify-otp\n\n**Auth:** None\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `mobile` | Yes | Valid 10-digit Indian mobile |\n| `otp` | Yes | Exactly 6 digits |\n| `action` | Yes | `LOGIN` |\n\n### Response\nReturns `accessToken`, `refreshToken`, and `user`: `{ uid, isBlocked, isProfileCompleted, isProfileVerified }`\n\nTokens are auto-saved to collection variables."
               },
               "response": []
             },
@@ -101,13 +140,15 @@
                 {
                   "listen": "test",
                   "script": {
+                    "type": "text/javascript",
                     "exec": [
                       "if (pm.response.code === 200) {",
                       "  const json = pm.response.json();",
                       "  if (json.accessToken) pm.collectionVariables.set('userAccessToken', json.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has new accessToken', () => pm.expect(pm.response.json().accessToken).to.be.a('string'));"
+                    ]
                   }
                 }
               ],
@@ -119,12 +160,24 @@
                   "raw": "{\n  \"refreshToken\": \"{{userRefreshToken}}\"\n}"
                 },
                 "url": "{{userBaseUrl}}/auth/refresh-token",
-                "description": "Returns new accessToken. Does not rotate refreshToken."
+                "description": "## POST /api/user/auth/refresh-token\n\n**Auth:** None\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `refreshToken` | Yes | Non-empty string |\n\nReturns new `accessToken`. Does not rotate refresh token."
               },
               "response": []
             },
             {
               "name": "Logout",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -133,12 +186,29 @@
                   "raw": "{\n  \"refreshToken\": \"{{userRefreshToken}}\"\n}"
                 },
                 "url": "{{userBaseUrl}}/auth/logout",
-                "description": "Invalidates refresh token."
+                "description": "## POST /api/user/auth/logout\n\n**Auth:** None\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `refreshToken` | Yes | Non-empty string |\n\nInvalidates the refresh token."
               },
               "response": []
             },
             {
               "name": "Get Me",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const user = pm.response.json().user;",
+                      "  if (user && user.id) pm.collectionVariables.set('userId', user.id);",
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has user object', () => pm.expect(pm.response.json().user).to.be.an('object'));",
+                      "pm.test('User has uid', () => pm.expect(pm.response.json().user.uid).to.be.a('number'));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -147,18 +217,87 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{userBaseUrl}}/auth/me",
-                "description": "Returns full user profile. Bearer token required."
+                "description": "## GET /api/user/auth/me\n\n**Auth:** Bearer `userAccessToken`\n\nReturns full user profile including `fullNameUpdatedAt`, `dateOfBirthUpdatedAt`."
               },
               "response": []
             }
-          ],
-          "description": "User OTP login and JWT session"
+          ]
+        },
+        {
+          "name": "auth — validation examples",
+          "description": "Negative test cases for auth validation. Expect `400` with `success: false`.",
+          "item": [
+            {
+              "name": "[400] Send OTP — invalid mobile",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));",
+                      "pm.test('Has message', () => pm.expect(pm.response.json().message).to.include('mobile'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"12345\",\n  \"action\": \"LOGIN\"\n}"
+                },
+                "url": "{{userBaseUrl}}/auth/send-otp"
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Verify OTP — invalid otp format",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"{{testMobile}}\",\n  \"otp\": \"12\",\n  \"action\": \"LOGIN\"\n}"
+                },
+                "url": "{{userBaseUrl}}/auth/verify-otp"
+              },
+              "response": []
+            }
+          ]
         },
         {
           "name": "profile",
+          "description": "User profile read and update. Mobile cannot be changed by user.",
           "item": [
             {
               "name": "Get Profile",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has user', () => pm.expect(pm.response.json().user).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -167,36 +306,25 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{userBaseUrl}}/profile",
-                "description": "Returns user with fullNameUpdatedAt, dateOfBirthUpdatedAt for cooldown UI."
+                "description": "## GET /api/user/profile\n\n**Auth:** Bearer\n\nReturns user with cooldown timestamps for verified profile UI."
               },
               "response": []
             },
             {
-              "name": "Update Profile (form-data)",
-              "request": {
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
-                },
-                "method": "PATCH",
-                "header": [],
-                "body": {
-                  "mode": "formdata",
-                  "formdata": [
-                    { "key": "fullName", "value": "Atul Kumar", "type": "text" },
-                    { "key": "gender", "value": "MALE", "type": "text", "description": "MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY" },
-                    { "key": "dateOfBirth", "value": "1998-05-15", "type": "text", "description": "YYYY-MM-DD" },
-                    { "key": "bio", "value": "Hello from ToMo", "type": "text" },
-                    { "key": "profileImage", "type": "file", "src": [], "description": "JPEG, PNG, WebP max 5MB" }
-                  ]
-                },
-                "url": "{{userBaseUrl}}/profile",
-                "description": "At least one field required. Do not send mobile. Verified users: gender locked; name & DOB 14-day cooldown each; bio & image always allowed."
-              },
-              "response": []
-            },
-            {
-              "name": "Update Profile (JSON only)",
+              "name": "Update Profile (JSON)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));",
+                      "pm.test('Profile completed', () => pm.expect(pm.response.json().user.isProfileCompleted).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -209,18 +337,99 @@
                   "raw": "{\n  \"fullName\": \"Atul Kumar\",\n  \"gender\": \"MALE\",\n  \"dateOfBirth\": \"1998-05-15\",\n  \"bio\": \"Hello from ToMo\"\n}"
                 },
                 "url": "{{userBaseUrl}}/profile",
-                "description": "Use when not uploading profile image."
+                "description": "## PATCH /api/user/profile\n\n**Auth:** Bearer\n\n### Body validation (at least one field required)\n| Field | Rules |\n|-------|-------|\n| `fullName` | 1–100 chars |\n| `gender` | `MALE` \\| `FEMALE` \\| `OTHER` \\| `PREFER_NOT_TO_SAY` |\n| `dateOfBirth` | `YYYY-MM-DD`, not in future |\n| `bio` | Max 500 chars |\n| `profileImage` | JPEG/PNG/WebP, max 5MB (multipart only) |\n| `mobile` | **Not allowed** — returns 400 |\n\n### Verified user rules\n- `gender` locked after verification\n- `fullName` & `dateOfBirth` — 14-day cooldown each\n- `bio` & `profileImage` always allowed"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Profile (form-data + image)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "fullName", "value": "Atul Kumar", "type": "text" },
+                    { "key": "gender", "value": "MALE", "type": "text" },
+                    { "key": "dateOfBirth", "value": "1998-05-15", "type": "text" },
+                    { "key": "bio", "value": "Hello from ToMo", "type": "text" },
+                    { "key": "profileImage", "type": "file", "src": [], "description": "JPEG, PNG, WebP — max 5MB" }
+                  ]
+                },
+                "url": "{{userBaseUrl}}/profile",
+                "description": "Same as JSON update but supports `profileImage` file upload via multipart/form-data."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Update Profile — mobile not allowed",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));",
+                      "pm.test('Mobile error', () => pm.expect(pm.response.json().message).to.include('Mobile'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mobile\": \"8888888888\"\n}"
+                },
+                "url": "{{userBaseUrl}}/profile"
               },
               "response": []
             }
-          ],
-          "description": "User profile read and update"
+          ]
         },
         {
           "name": "verification",
+          "description": "Live selfie video verification (5–10 seconds).",
           "item": [
             {
               "name": "Upload Selfie Video",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201 || pm.response.code === 200) {",
+                      "  const v = pm.response.json().verification;",
+                      "  if (v && v.id) pm.collectionVariables.set('verificationId', v.id);",
+                      "}",
+                      "pm.test('Status 200 or 201', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -235,17 +444,32 @@
                       "key": "verificationVideo",
                       "type": "file",
                       "src": [],
-                      "description": "5-10 sec, MP4/WebM/MOV, max 50MB"
+                      "description": "5–10 sec, MP4/WebM/MOV, max 50MB. Field name must be verificationVideo."
                     }
                   ]
                 },
                 "url": "{{userBaseUrl}}/verification/video",
-                "description": "Creates PENDING verification. Blocked if already PENDING or APPROVED."
+                "description": "## POST /api/user/verification/video\n\n**Auth:** Bearer\n\n### Body (multipart)\n| Field | Required | Rules |\n|-------|----------|-------|\n| `verificationVideo` | Yes | MP4/WebM/MOV, max 50MB, 5–10 sec duration |\n\nCreates `PENDING` submission. Blocked if already `PENDING` or `APPROVED`."
               },
               "response": []
             },
             {
               "name": "Get Verification Status",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const v = pm.response.json().verification;",
+                      "  if (v && v.id) pm.collectionVariables.set('verificationId', v.id);",
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -254,18 +478,156 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{userBaseUrl}}/verification/video",
-                "description": "Latest submission. status: PENDING | APPROVED | REJECTED. remark shown if rejected."
+                "description": "## GET /api/user/verification/video\n\n**Auth:** Bearer\n\nReturns latest submission: `status` = `PENDING` | `APPROVED` | `REJECTED`. `remark` shown when rejected."
               },
               "response": []
             }
-          ],
-          "description": "Live selfie video verification (5-10 seconds)"
+          ]
         },
         {
           "name": "activities",
+          "description": "Location-based activities. **Verified profile required** for create and discovery.",
           "item": [
             {
-              "name": "Create Activity",
+              "name": "List Discovery",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has activities array', () => pm.expect(pm.response.json().activities).to.be.an('array'));",
+                      "pm.test('Has pagination', () => pm.expect(pm.response.json().pagination).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{userBaseUrl}}/activities?page=1&limit=20&size=group&category=COFFEE",
+                  "host": ["{{userBaseUrl}}"],
+                  "path": ["activities"],
+                  "query": [
+                    { "key": "page", "value": "1", "description": "Positive integer, default 1" },
+                    { "key": "limit", "value": "20", "description": "1–50, default 20" },
+                    { "key": "category", "value": "COFFEE", "description": "COFFEE|WALKING|SPORTS|GYM|STUDY|COWORKING|DINING|TRAVEL|ENTERTAINMENT|OTHER" },
+                    { "key": "size", "value": "group", "description": "single (maxParticipants=2) | group (3+)" },
+                    { "key": "city", "value": "Delhi", "disabled": true },
+                    { "key": "latitude", "value": "28.5244", "disabled": true, "description": "Requires longitude + radiusKm" },
+                    { "key": "longitude", "value": "77.2066", "disabled": true },
+                    { "key": "radiusKm", "value": "10", "disabled": true, "description": "Max 100" }
+                  ]
+                },
+                "description": "## GET /api/user/activities\n\n**Auth:** Bearer (verified profile)\n\nReturns `PUBLISHED` activities only.\n\n### Query params\n| Param | Rules |\n|-------|-------|\n| `page` | ≥ 1 |\n| `limit` | 1–50 |\n| `category` | Valid ActivityCategory |\n| `size` | `single` or `group` |\n| `city` | String |\n| `latitude`+`longitude`+`radiusKm` | All three required together |"
+              },
+              "response": []
+            },
+            {
+              "name": "List My Hosted",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has activities', () => pm.expect(pm.response.json().activities).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{userBaseUrl}}/activities/mine/hosted?page=1&limit=20",
+                  "host": ["{{userBaseUrl}}"],
+                  "path": ["activities", "mine", "hosted"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                },
+                "description": "## GET /api/user/activities/mine/hosted\n\n**Auth:** Bearer\n\nAll activities created by host including `DELETED`."
+              },
+              "response": []
+            },
+            {
+              "name": "List My Joined",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has activities', () => pm.expect(pm.response.json().activities).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{userBaseUrl}}/activities/mine/joined?page=1&limit=20",
+                  "host": ["{{userBaseUrl}}"],
+                  "path": ["activities", "mine", "joined"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                },
+                "description": "## GET /api/user/activities/mine/joined\n\n**Auth:** Bearer\n\nActivities user joined (pending/approved). Includes `CANCELLED`, `EXPIRED`, `ACTIVE`, `COMPLETED`."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Activity (Group)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const start = new Date(Date.now() + 45 * 60 * 1000);",
+                      "const end = new Date(start.getTime() + 60 * 60 * 1000);",
+                      "pm.collectionVariables.set('activityStartTime', start.toISOString());",
+                      "pm.collectionVariables.set('activityEndTime', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const a = pm.response.json().activity;",
+                      "  if (a && a.id) pm.collectionVariables.set('activityId', a.id);",
+                      "}",
+                      "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                      "pm.test('Status PUBLISHED', () => pm.expect(pm.response.json().activity.status).to.eql('PUBLISHED'));",
+                      "pm.test('approvedCount is 1', () => pm.expect(pm.response.json().activity.approvedCount).to.eql(1));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -275,27 +637,328 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"title\": \"Coffee after work\",\n  \"description\": \"Quick coffee near office. Casual chat welcome.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"address\": \"Select Citywalk, Saket\",\n  \"city\": \"Delhi\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"2026-06-15T17:30:00.000Z\",\n  \"endTime\": \"2026-06-15T18:30:00.000Z\",\n  \"maxParticipants\": 4\n}"
+                  "raw": "{\n  \"title\": \"Coffee after work\",\n  \"description\": \"Quick coffee near office. Casual chat welcome.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"address\": \"Select Citywalk, Saket\",\n  \"city\": \"Delhi\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"{{activityStartTime}}\",\n  \"endTime\": \"{{activityEndTime}}\",\n  \"maxParticipants\": 4\n}"
                 },
                 "url": "{{userBaseUrl}}/activities",
-                "description": "Create a published activity. Requires completed profile. Host is auto-added as first approved participant (approvedCount: 1). Categories: COFFEE, WALKING, SPORTS, GYM, STUDY, COWORKING, DINING, TRAVEL, ENTERTAINMENT, OTHER. Duration: 30 min – 8 hours. startTime must be in the future."
+                "description": "## POST /api/user/activities\n\n**Auth:** Bearer (verified profile)\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `title` | Yes | 5–100 chars |\n| `description` | Yes | 10–1000 chars |\n| `category` | Yes | See categories below |\n| `locationName` | Yes | Max 200 chars |\n| `address` | No | Max 500 chars |\n| `city` | No | Max 100 chars |\n| `latitude` | Yes | -90 to 90 |\n| `longitude` | Yes | -180 to 180 |\n| `startTime` | Yes | ISO datetime, 30min–24h from now |\n| `endTime` | Yes | After startTime, duration 30min–8h |\n| `maxParticipants` | Yes | 2 (single) or 3–20 (group) |\n\n**Categories:** COFFEE, WALKING, SPORTS, GYM, STUDY, COWORKING, DINING, TRAVEL, ENTERTAINMENT, OTHER\n\nTimes auto-set in pre-request script (45min from now, 1h duration)."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Activity (Single)",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const start = new Date(Date.now() + 45 * 60 * 1000);",
+                      "const end = new Date(start.getTime() + 60 * 60 * 1000);",
+                      "pm.collectionVariables.set('activityStartTime', start.toISOString());",
+                      "pm.collectionVariables.set('activityEndTime', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const a = pm.response.json().activity;",
+                      "  if (a && a.id) pm.collectionVariables.set('activityId', a.id);",
+                      "}",
+                      "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                      "pm.test('Single activity', () => pm.expect(pm.response.json().activity.maxParticipants).to.eql(2));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"1-on-1 coffee chat\",\n  \"description\": \"Looking for one person to grab coffee nearby.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"address\": \"Select Citywalk, Saket\",\n  \"city\": \"Delhi\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"{{activityStartTime}}\",\n  \"endTime\": \"{{activityEndTime}}\",\n  \"maxParticipants\": 2\n}"
+                },
+                "url": "{{userBaseUrl}}/activities",
+                "description": "Same as group create but `maxParticipants: 2` for single/1-on-1 activities."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Activity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has activity', () => pm.expect(pm.response.json().activity).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}",
+                "description": "## GET /api/user/activities/:id\n\n**Auth:** Bearer\n\nVisibility: `PUBLISHED` (anyone), `DELETED` (host only), `CANCELLED`/`EXPIRED`/`ACTIVE`/`COMPLETED` (host + participants)."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Activity",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const start = new Date(Date.now() + 60 * 60 * 1000);",
+                      "const end = new Date(start.getTime() + 90 * 60 * 1000);",
+                      "pm.collectionVariables.set('activityStartTime', start.toISOString());",
+                      "pm.collectionVariables.set('activityEndTime', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Coffee after work (updated)\",\n  \"description\": \"Quick coffee near office. Casual chat welcome.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"address\": \"Select Citywalk, Saket\",\n  \"city\": \"Delhi\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"{{activityStartTime}}\",\n  \"endTime\": \"{{activityEndTime}}\",\n  \"maxParticipants\": 4\n}"
+                },
+                "url": "{{userBaseUrl}}/activities/{{activityId}}",
+                "description": "## PATCH /api/user/activities/:id\n\n**Auth:** Bearer (host)\n\n**When:** `PUBLISHED` + no pending/approved joiners (non-host)\n\nSame body validation as create. All fields required."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Activity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status DELETED', () => pm.expect(pm.response.json().activity.status).to.eql('DELETED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}",
+                "description": "## DELETE /api/user/activities/:id\n\n**Auth:** Bearer (host)\n\n**When:** `PUBLISHED` + no joiners → `DELETED` (visible to host only)"
+              },
+              "response": []
+            },
+            {
+              "name": "Cancel Activity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status CANCELLED', () => pm.expect(pm.response.json().activity.status).to.eql('CANCELLED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/cancel",
+                "description": "## POST /api/user/activities/:id/cancel\n\n**Auth:** Bearer (host)\n\n**When:** `PUBLISHED` + has pending/approved joiners → `CANCELLED`"
+              },
+              "response": []
+            },
+            {
+              "name": "Start Activity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status ACTIVE', () => pm.expect(pm.response.json().activity.status).to.eql('ACTIVE'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/start",
+                "description": "## POST /api/user/activities/:id/start\n\n**Auth:** Bearer (host)\n\n**When:** `PUBLISHED` → `ACTIVE` (manual). Cannot start after endTime."
+              },
+              "response": []
+            },
+            {
+              "name": "Complete Activity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status COMPLETED', () => pm.expect(pm.response.json().activity.status).to.eql('COMPLETED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/complete",
+                "description": "## POST /api/user/activities/:id/complete\n\n**Auth:** Bearer (host)\n\n**When:** `ACTIVE` → `COMPLETED` (manual). No cancel/edit during ACTIVE."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Create Activity — title too short",
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const start = new Date(Date.now() + 45 * 60 * 1000);",
+                      "const end = new Date(start.getTime() + 60 * 60 * 1000);",
+                      "pm.collectionVariables.set('activityStartTime', start.toISOString());",
+                      "pm.collectionVariables.set('activityEndTime', end.toISOString());"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Hi\",\n  \"description\": \"Quick coffee near office. Casual chat welcome.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"{{activityStartTime}}\",\n  \"endTime\": \"{{activityEndTime}}\",\n  \"maxParticipants\": 4\n}"
+                },
+                "url": "{{userBaseUrl}}/activities"
+              },
+              "response": []
+            },
+            {
+              "name": "[403] Create Activity — not verified",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Coffee after work\",\n  \"description\": \"Quick coffee near office. Casual chat welcome.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"{{activityStartTime}}\",\n  \"endTime\": \"{{activityEndTime}}\",\n  \"maxParticipants\": 4\n}"
+                },
+                "url": "{{userBaseUrl}}/activities",
+                "description": "Run before admin approves verification. Expect 403."
               },
               "response": []
             }
-          ],
-          "description": "Location-based activities"
+          ]
         }
-      ],
-      "description": "User-facing APIs under /api/user"
+      ]
     },
     {
       "name": "admin",
+      "description": "Admin APIs under `/api/admin`. Protected routes use Bearer `{{adminAccessToken}}`.",
       "item": [
         {
           "name": "auth",
+          "description": "Admin JWT registration and session.",
           "item": [
             {
               "name": "Register",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200 or 201', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -304,7 +967,7 @@
                   "raw": "{\n  \"email\": \"admin@tomo.com\",\n  \"password\": \"securepass123\",\n  \"fullName\": \"Admin User\"\n}"
                 },
                 "url": "{{adminBaseUrl}}/register",
-                "description": "Create admin account. Password min 8 chars."
+                "description": "## POST /api/admin/register\n\n**Auth:** None\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `email` | Yes | Valid email format |\n| `password` | Yes | 8–128 chars |\n| `fullName` | Yes | 1–100 chars |"
               },
               "response": []
             },
@@ -314,14 +977,16 @@
                 {
                   "listen": "test",
                   "script": {
+                    "type": "text/javascript",
                     "exec": [
                       "if (pm.response.code === 200) {",
                       "  const json = pm.response.json();",
                       "  if (json.accessToken) pm.collectionVariables.set('adminAccessToken', json.accessToken);",
                       "  if (json.refreshToken) pm.collectionVariables.set('adminRefreshToken', json.refreshToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has accessToken', () => pm.expect(pm.response.json().accessToken).to.be.a('string'));"
+                    ]
                   }
                 }
               ],
@@ -333,7 +998,7 @@
                   "raw": "{\n  \"email\": \"admin@tomo.com\",\n  \"password\": \"securepass123\"\n}"
                 },
                 "url": "{{adminBaseUrl}}/login",
-                "description": "Returns admin accessToken & refreshToken. Auto-saved to collection variables."
+                "description": "## POST /api/admin/login\n\n**Auth:** None\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `email` | Yes | Valid email |\n| `password` | Yes | Non-empty string |"
               },
               "response": []
             },
@@ -343,13 +1008,14 @@
                 {
                   "listen": "test",
                   "script": {
+                    "type": "text/javascript",
                     "exec": [
                       "if (pm.response.code === 200) {",
                       "  const json = pm.response.json();",
                       "  if (json.accessToken) pm.collectionVariables.set('adminAccessToken', json.accessToken);",
-                      "}"
-                    ],
-                    "type": "text/javascript"
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                    ]
                   }
                 }
               ],
@@ -366,6 +1032,17 @@
             },
             {
               "name": "Logout",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -377,14 +1054,36 @@
               },
               "response": []
             }
-          ],
-          "description": "Admin JWT auth"
+          ]
         },
         {
           "name": "users",
+          "description": "Admin user management.",
           "item": [
             {
               "name": "List Users",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const users = pm.response.json().users;",
+                      "  if (users && users.length > 0) {",
+                      "    pm.collectionVariables.set('userId', users[0].id);",
+                      "    if (users[0].latestVerification && users[0].latestVerification.id) {",
+                      "      pm.collectionVariables.set('verificationId', users[0].latestVerification.id);",
+                      "    }",
+                      "  }",
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has users array', () => pm.expect(pm.response.json().users).to.be.an('array'));",
+                      "pm.test('Has pagination', () => pm.expect(pm.response.json().pagination).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -397,16 +1096,28 @@
                   "host": ["{{adminBaseUrl}}"],
                   "path": ["users"],
                   "query": [
-                    { "key": "page", "value": "1" },
-                    { "key": "limit", "value": "20" }
+                    { "key": "page", "value": "1", "description": "≥ 1" },
+                    { "key": "limit", "value": "20", "description": "1–100" }
                   ]
                 },
-                "description": "Paginated user list with latestVerification per user."
+                "description": "## GET /api/admin/users\n\n**Auth:** Admin Bearer\n\nAuto-saves first user's `userId` and `verificationId` (if pending)."
               },
               "response": []
             },
             {
               "name": "Block User",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('User blocked', () => pm.expect(pm.response.json().user.isBlocked).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -419,12 +1130,24 @@
                   "raw": "{\n  \"isBlocked\": true\n}"
                 },
                 "url": "{{adminBaseUrl}}/users/{{userId}}/block",
-                "description": "Set isBlocked true/false. Revokes refresh tokens when blocking."
+                "description": "## PATCH /api/admin/users/:userId/block\n\n**Auth:** Admin Bearer\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `isBlocked` | Yes | Boolean |\n\nRevokes refresh tokens when blocking."
               },
               "response": []
             },
             {
               "name": "Unblock User",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('User unblocked', () => pm.expect(pm.response.json().user.isBlocked).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -441,7 +1164,37 @@
               "response": []
             },
             {
-              "name": "Update User Profile",
+              "name": "Update User Profile (JSON)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('success true', () => pm.expect(pm.response.json().success).to.eql(true));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Updated Name\",\n  \"bio\": \"Updated bio\",\n  \"isProfileVerified\": true\n}"
+                },
+                "url": "{{adminBaseUrl}}/users/{{userId}}/profile",
+                "description": "## PATCH /api/admin/users/:userId/profile\n\n**Auth:** Admin Bearer\n\n### Updatable fields (at least one required)\n`mobile`, `fullName`, `gender`, `dateOfBirth`, `bio`, `isProfileCompleted`, `isProfileVerified`, `profileImage`\n\nAdmin has no cooldown restrictions. Can change mobile."
+              },
+              "response": []
+            },
+            {
+              "name": "Update User Profile (form-data)",
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -452,7 +1205,7 @@
                 "body": {
                   "mode": "formdata",
                   "formdata": [
-                    { "key": "mobile", "value": "9999999999", "type": "text", "description": "Admin can change mobile" },
+                    { "key": "mobile", "value": "{{testMobile}}", "type": "text" },
                     { "key": "fullName", "value": "Updated Name", "type": "text" },
                     { "key": "gender", "value": "MALE", "type": "text" },
                     { "key": "dateOfBirth", "value": "1998-05-15", "type": "text" },
@@ -462,19 +1215,30 @@
                     { "key": "profileImage", "type": "file", "src": [] }
                   ]
                 },
-                "url": "{{adminBaseUrl}}/users/{{userId}}/profile",
-                "description": "No user restrictions. Admin can update all fields including mobile."
+                "url": "{{adminBaseUrl}}/users/{{userId}}/profile"
               },
               "response": []
             }
-          ],
-          "description": "Admin user management"
+          ]
         },
         {
           "name": "verification",
+          "description": "Admin review of selfie verification videos.",
           "item": [
             {
               "name": "Approve Verification Video",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status APPROVED', () => pm.expect(pm.response.json().verification.status).to.eql('APPROVED'));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -487,12 +1251,24 @@
                   "raw": "{\n  \"status\": \"APPROVED\"\n}"
                 },
                 "url": "{{adminBaseUrl}}/verification-videos/{{verificationId}}",
-                "description": "Sets video APPROVED and user isProfileVerified true."
+                "description": "## PATCH /api/admin/verification-videos/:verificationId\n\n**Auth:** Admin Bearer\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `status` | Yes | `APPROVED` or `REJECTED` |\n| `remark` | If REJECTED | Non-empty, max 500 chars |\n\nSets user `isProfileVerified: true` on approve."
               },
               "response": []
             },
             {
               "name": "Reject Verification Video",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status REJECTED', () => pm.expect(pm.response.json().verification.status).to.eql('REJECTED'));"
+                    ]
+                  }
+                }
+              ],
               "request": {
                 "auth": {
                   "type": "bearer",
@@ -505,15 +1281,43 @@
                   "raw": "{\n  \"status\": \"REJECTED\",\n  \"remark\": \"Face not clearly visible. Please re-record in good lighting.\"\n}"
                 },
                 "url": "{{adminBaseUrl}}/verification-videos/{{verificationId}}",
-                "description": "remark is required when rejecting."
+                "description": "`remark` is **required** when status is `REJECTED`."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Reject — missing remark",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));",
+                      "pm.test('Remark required', () => pm.expect(pm.response.json().message).to.include('Remark'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"REJECTED\"\n}"
+                },
+                "url": "{{adminBaseUrl}}/verification-videos/{{verificationId}}"
               },
               "response": []
             }
-          ],
-          "description": "Admin review of selfie verification videos"
+          ]
         }
-      ],
-      "description": "Admin APIs under /api/admin"
+      ]
     }
   ]
 }

@@ -43,6 +43,7 @@ enum ActivityStatus {
   CANCELLED
   ACTIVE
   COMPLETED
+  EXPIRED
 }
 
 enum ParticipantStatus {
@@ -101,6 +102,7 @@ model Activity {
   completedAt     DateTime?
   cancelledAt     DateTime?
   deletedAt       DateTime?
+  expiredAt       DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   host            User             @relation("HostedActivities", fields: [hostId], references: [id], onDelete: Cascade)

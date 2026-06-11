@@ -59,11 +59,13 @@ src/
 ```
 
 Import Postman files from `postman/`:
-- `ToMo-API.postman_collection.json` — all APIs with docs and auto-save token scripts
+- `ToMo-API.postman_collection.json` — **complete collection** (all APIs, validation docs, test scripts, auto-save tokens/IDs)
 - `ToMo-Local.postman_environment.json` — localhost
 - `ToMo-Production.postman_environment.json` — Render
 
-Postman → **Import** → select files → choose environment (top-right).
+Postman → **Import** → select all 3 files → choose environment (top-right: **ToMo Local** or **ToMo Production**).
+
+Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activityStartTime`/`activityEndTime` for activity create/update.
 
 ## API Endpoints
 
@@ -79,7 +81,16 @@ Postman → **Import** → select files → choose environment (top-right).
 | PATCH  | `/api/user/profile`           | Bearer   |
 | POST   | `/api/user/verification/video`| Bearer   |
 | GET    | `/api/user/verification/video`| Bearer   |
+| GET    | `/api/user/activities`        | Bearer   |
+| GET    | `/api/user/activities/mine/hosted` | Bearer |
+| GET    | `/api/user/activities/mine/joined` | Bearer |
 | POST   | `/api/user/activities`        | Bearer   |
+| GET    | `/api/user/activities/:id`    | Bearer   |
+| PATCH  | `/api/user/activities/:id`    | Bearer   |
+| DELETE | `/api/user/activities/:id`    | Bearer   |
+| POST   | `/api/user/activities/:id/cancel` | Bearer |
+| POST   | `/api/user/activities/:id/start` | Bearer |
+| POST   | `/api/user/activities/:id/complete` | Bearer |
 | POST   | `/api/admin/register`    | No       |
 | POST   | `/api/admin/login`       | No       |
 | POST   | `/api/admin/refresh-token` | No     |
@@ -135,9 +146,17 @@ Uploaded images are stored under `uploads/profiles/` and exposed at `/uploads/pr
 
 `GET /api/user/verification/video` — returns the latest verification submission for the logged-in user.
 
-### Create activity
+### Activities
 
-`POST /api/user/activities` — create a published activity. Requires completed profile.
+Verified profile required for all activity endpoints (`isProfileVerified: true`).
+
+**Single vs group:** no separate field — `maxParticipants: 2` = single, `3–20` = group. Filter discovery with `?size=single` or `?size=group`.
+
+**Time rules:** `startTime` must be 30 minutes to 24 hours from now. Duration 30 minutes to 8 hours.
+
+#### Create — `POST /api/user/activities`
+
+Publishes immediately as `PUBLISHED`. Host is auto-added as first approved participant.
 
 ```json
 {
@@ -157,7 +176,31 @@ Uploaded images are stored under `uploads/profiles/` and exposed at `/uploads/pr
 
 Categories: `COFFEE` | `WALKING` | `SPORTS` | `GYM` | `STUDY` | `COWORKING` | `DINING` | `TRAVEL` | `ENTERTAINMENT` | `OTHER`
 
-Host is auto-added as the first approved participant (`approvedCount: 1`).
+#### Discovery — `GET /api/user/activities`
+
+Query: `page`, `limit`, `category`, `size` (`single`|`group`), `city`, `latitude`+`longitude`+`radiusKm`.
+
+Returns `PUBLISHED` activities only.
+
+#### Host lists — `GET /api/user/activities/mine/hosted`
+
+All activities created by the host (including `DELETED`).
+
+#### Joined list — `GET /api/user/activities/mine/joined`
+
+Activities the user joined (pending/approved). Includes `CANCELLED`, `EXPIRED`, `ACTIVE`, `COMPLETED`.
+
+#### Lifecycle (host)
+
+| Action | Endpoint | When |
+| ------ | -------- | ---- |
+| Edit | `PATCH /api/user/activities/:id` | `PUBLISHED`, no pending/approved joiners |
+| Delete | `DELETE /api/user/activities/:id` | `PUBLISHED`, no joiners → `DELETED` (host only) |
+| Cancel | `POST /api/user/activities/:id/cancel` | `PUBLISHED`, has joiners → `CANCELLED` |
+| Start | `POST /api/user/activities/:id/start` | `PUBLISHED` → `ACTIVE` |
+| Complete | `POST /api/user/activities/:id/complete` | `ACTIVE` → `COMPLETED` |
+
+Unstarted activities past `endTime` are auto-marked `EXPIRED` (background job, every 60s).
 
 ### Admin APIs
 

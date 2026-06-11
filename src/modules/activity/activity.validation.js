@@ -7,6 +7,8 @@ const {
   MAX_PARTICIPANTS,
   MIN_DURATION_MS,
   MAX_DURATION_MS,
+  MIN_LEAD_TIME_MS,
+  MAX_START_WINDOW_MS,
   ALLOWED_CATEGORIES,
 } = require('./activity.constants');
 
@@ -122,26 +124,37 @@ const validateMaxParticipants = (value) => {
   return null;
 };
 
-const validateCreateActivity = (body) => {
-  if (!body || typeof body !== 'object') {
-    return { error: 'Request body is required' };
+const validateActivityTimes = (startTime, endTime) => {
+  const now = new Date();
+  const minStart = new Date(now.getTime() + MIN_LEAD_TIME_MS);
+  const maxStart = new Date(now.getTime() + MAX_START_WINDOW_MS);
+
+  if (startTime < minStart) {
+    return 'Start time must be at least 30 minutes from now';
   }
 
-  const checks = [
-    validateTitle(body.title),
-    validateDescription(body.description),
-    validateCategory(body.category),
-    validateLocationName(body.locationName),
-    validateOptionalString(body.address, 'Address', 500),
-    validateOptionalString(body.city, 'City', 100),
-    validateMaxParticipants(body.maxParticipants),
-  ];
-
-  const fieldError = checks.find((error) => error !== null);
-  if (fieldError) {
-    return { error: fieldError };
+  if (startTime > maxStart) {
+    return 'Start time must be within 24 hours from now';
   }
 
+  if (endTime <= startTime) {
+    return 'End time must be after start time';
+  }
+
+  const durationMs = endTime.getTime() - startTime.getTime();
+
+  if (durationMs < MIN_DURATION_MS) {
+    return 'Activity duration must be at least 30 minutes';
+  }
+
+  if (durationMs > MAX_DURATION_MS) {
+    return 'Activity duration must be at most 8 hours';
+  }
+
+  return null;
+};
+
+const buildActivityData = (body) => {
   const latitudeResult = parseCoordinate(body.latitude, 'Latitude', -90, 90);
   if (latitudeResult.error) {
     return { error: latitudeResult.error };
@@ -162,27 +175,15 @@ const validateCreateActivity = (body) => {
     return { error: endTimeResult.error };
   }
 
-  const startTime = startTimeResult.value;
-  const endTime = endTimeResult.value;
-  const now = new Date();
-
-  if (startTime <= now) {
-    return { error: 'Start time must be in the future' };
+  const timeError = validateActivityTimes(startTimeResult.value, endTimeResult.value);
+  if (timeError) {
+    return { error: timeError };
   }
 
-  if (endTime <= startTime) {
-    return { error: 'End time must be after start time' };
-  }
-
-  const durationMs = endTime.getTime() - startTime.getTime();
-
-  if (durationMs < MIN_DURATION_MS) {
-    return { error: 'Activity duration must be at least 30 minutes' };
-  }
-
-  if (durationMs > MAX_DURATION_MS) {
-    return { error: 'Activity duration must be at most 8 hours' };
-  }
+  const maxParsed =
+    typeof body.maxParticipants === 'number'
+      ? body.maxParticipants
+      : parseInt(body.maxParticipants, 10);
 
   return {
     data: {
@@ -194,13 +195,100 @@ const validateCreateActivity = (body) => {
       city: body.city?.trim() || null,
       latitude: latitudeResult.value,
       longitude: longitudeResult.value,
-      startTime,
-      endTime,
-      maxParticipants: parseInt(body.maxParticipants, 10),
+      startTime: startTimeResult.value,
+      endTime: endTimeResult.value,
+      maxParticipants: maxParsed,
     },
   };
 };
 
+const validateActivityPayload = (body) => {
+  if (!body || typeof body !== 'object') {
+    return { error: 'Request body is required' };
+  }
+
+  const checks = [
+    validateTitle(body.title),
+    validateDescription(body.description),
+    validateCategory(body.category),
+    validateLocationName(body.locationName),
+    validateOptionalString(body.address, 'Address', 500),
+    validateOptionalString(body.city, 'City', 100),
+    validateMaxParticipants(body.maxParticipants),
+  ];
+
+  const fieldError = checks.find((error) => error !== null);
+  if (fieldError) {
+    return { error: fieldError };
+  }
+
+  return buildActivityData(body);
+};
+
+const validateCreateActivity = (body) => validateActivityPayload(body);
+
+const validateUpdateActivity = (body) => validateActivityPayload(body);
+
+const parsePositiveInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) || parsed < 1 ? fallback : parsed;
+};
+
+const validateDiscoveryQuery = (query) => {
+  const page = parsePositiveInt(query.page, 1);
+  const limit = Math.min(parsePositiveInt(query.limit, 20), 50);
+
+  const filters = {};
+
+  if (query.category) {
+    const normalized = String(query.category).trim().toUpperCase();
+    if (!ALLOWED_CATEGORIES.includes(normalized)) {
+      return { error: `Invalid category. Allowed values: ${ALLOWED_CATEGORIES.join(', ')}` };
+    }
+    filters.category = normalized;
+  }
+
+  if (query.size) {
+    const size = String(query.size).trim().toLowerCase();
+    if (size === 'single') {
+      filters.maxParticipants = 2;
+    } else if (size === 'group') {
+      filters.isGroup = true;
+    } else {
+      return { error: 'Invalid size. Allowed values: single, group' };
+    }
+  }
+
+  if (query.city) {
+    filters.city = String(query.city).trim();
+  }
+
+  if (query.latitude !== undefined || query.longitude !== undefined || query.radiusKm !== undefined) {
+    const lat = parseFloat(query.latitude);
+    const lng = parseFloat(query.longitude);
+    const radiusKm = parseFloat(query.radiusKm);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng) || Number.isNaN(radiusKm) || radiusKm <= 0) {
+      return { error: 'latitude, longitude, and radiusKm are required for location filter' };
+    }
+
+    filters.latitude = lat;
+    filters.longitude = lng;
+    filters.radiusKm = Math.min(radiusKm, 100);
+  }
+
+  return { data: { page, limit, filters } };
+};
+
+const validateListQuery = (query) => {
+  const page = parsePositiveInt(query.page, 1);
+  const limit = Math.min(parsePositiveInt(query.limit, 20), 50);
+  return { data: { page, limit } };
+};
+
 module.exports = {
   validateCreateActivity,
+  validateUpdateActivity,
+  validateDiscoveryQuery,
+  validateListQuery,
 };

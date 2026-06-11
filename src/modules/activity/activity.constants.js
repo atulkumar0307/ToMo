@@ -8,8 +8,12 @@ const MIN_PARTICIPANTS = 2;
 const MAX_PARTICIPANTS = 20;
 const MIN_DURATION_MS = 30 * 60 * 1000;
 const MAX_DURATION_MS = 8 * 60 * 60 * 1000;
+const MIN_LEAD_TIME_MS = 30 * 60 * 1000;
+const MAX_START_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const ALLOWED_CATEGORIES = Object.values(ActivityCategory);
+
+const DISCOVERY_STATUSES = ['PUBLISHED'];
 
 const ACTIVITY_HOST_SELECT = {
   uid: true,
@@ -37,6 +41,7 @@ const ACTIVITY_SELECT = {
   completedAt: true,
   cancelledAt: true,
   deletedAt: true,
+  expiredAt: true,
   createdAt: true,
   updatedAt: true,
   host: {
@@ -53,7 +58,10 @@ module.exports = {
   MAX_PARTICIPANTS,
   MIN_DURATION_MS,
   MAX_DURATION_MS,
+  MIN_LEAD_TIME_MS,
+  MAX_START_WINDOW_MS,
   ALLOWED_CATEGORIES,
+  DISCOVERY_STATUSES,
   ACTIVITY_HOST_SELECT,
   ACTIVITY_SELECT,
 };
