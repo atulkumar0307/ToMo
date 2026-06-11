@@ -1,17 +1,28 @@
-const MIN_VIDEO_DURATION_SEC = 5;
-const MAX_VIDEO_DURATION_SEC = 10;
+const MIN_IMAGES = 3;
+const MAX_IMAGES = 5;
 
-const VERIFICATION_VIDEO_SELECT = {
+const VERIFICATION_IMAGE_SELECT = {
   id: true,
-  videoPath: true,
+  imagePath: true,
+  sortOrder: true,
+  createdAt: true,
+};
+
+const VERIFICATION_SUBMISSION_SELECT = {
+  id: true,
   status: true,
   remark: true,
   createdAt: true,
   updatedAt: true,
+  images: {
+    orderBy: { sortOrder: 'asc' },
+    select: VERIFICATION_IMAGE_SELECT,
+  },
 };
 
 module.exports = {
-  MIN_VIDEO_DURATION_SEC,
-  MAX_VIDEO_DURATION_SEC,
-  VERIFICATION_VIDEO_SELECT,
+  MIN_IMAGES,
+  MAX_IMAGES,
+  VERIFICATION_IMAGE_SELECT,
+  VERIFICATION_SUBMISSION_SELECT,
 };

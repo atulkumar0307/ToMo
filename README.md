@@ -55,7 +55,7 @@ src/
 
 /api/admin/auth/...        (register, login, refresh-token, logout)
 /api/admin/users/...
-/api/admin/verification-videos/...
+/api/admin/verifications/...
 ```
 
 Import Postman files from `postman/`:
@@ -79,8 +79,8 @@ Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activi
 | GET    | `/api/user/auth/me`           | Bearer   |
 | GET    | `/api/user/profile`           | Bearer   |
 | PATCH  | `/api/user/profile`           | Bearer   |
-| POST   | `/api/user/verification/video`| Bearer   |
-| GET    | `/api/user/verification/video`| Bearer   |
+| POST   | `/api/user/verification`      | Bearer   |
+| GET    | `/api/user/verification`      | Bearer   |
 | GET    | `/api/user/activities`        | Bearer   |
 | GET    | `/api/user/activities/mine/hosted` | Bearer |
 | GET    | `/api/user/activities/mine/joined` | Bearer |
@@ -98,7 +98,7 @@ Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activi
 | GET    | `/api/admin/users`       | Admin Bearer |
 | PATCH  | `/api/admin/users/:userId/block` | Admin Bearer |
 | PATCH  | `/api/admin/users/:userId/profile` | Admin Bearer |
-| PATCH  | `/api/admin/verification-videos/:verificationId` | Admin Bearer |
+| PATCH  | `/api/admin/verifications/:verificationId` | Admin Bearer |
 
 ## Development OTP
 
@@ -133,18 +133,18 @@ Only allowlisted actions are accepted (currently: `LOGIN`). Send the same `actio
 
 Uploaded images are stored under `uploads/profiles/` and exposed at `/uploads/profiles/<filename>`. The saved path is returned as `profileImagePath` on the user object.
 
-`isProfileCompleted` is set to `true` on successful profile update. `isProfileVerified` stays `false` by default until admin approves the verification video.
+`isProfileCompleted` is set to `true` on successful profile update. `isProfileVerified` stays `false` by default until admin approves the verification images.
 
-### Verification video (live selfie)
+### Verification images
 
-`POST /api/user/verification/video` — upload a 5–10 second live selfie video for profile verification.
+`POST /api/user/verification` — upload 3–5 selfie images for profile verification.
 
 - **Body:** `multipart/form-data`
-- **Field:** `verificationVideo` (file) — MP4, WebM, or MOV, max 50MB
+- **Field:** `verificationImages` (files, 3–5) — JPEG, PNG, or WebP, max 5MB each
 - **Status:** `PENDING` | `APPROVED` | `REJECTED`
 - **remark:** set by admin when rejecting (shown to user on status check)
 
-`GET /api/user/verification/video` — returns the latest verification submission for the logged-in user.
+`GET /api/user/verification` — returns the latest verification submission with `images[]` for the logged-in user.
 
 ### Activities
 
@@ -227,7 +227,7 @@ Returns `accessToken`, `refreshToken`, and `admin` object. Use `Authorization: B
 
 **List users** — `GET /api/admin/users?page=1&limit=20`
 
-Returns users with `latestVerification` (most recent video submission).
+Returns users with `latestVerification` (most recent image submission).
 
 **Block / unblock user** — `PATCH /api/admin/users/:userId/block`
 
@@ -241,19 +241,19 @@ Blocking also revokes all active refresh tokens for that user.
 
 Same fields as user profile update (`fullName`, `gender`, `dateOfBirth`, `bio`, `profileImage`) plus admin fields `isProfileCompleted`, `isProfileVerified`. Supports `multipart/form-data`.
 
-**Review verification** — `PATCH /api/admin/verification-videos/:verificationId`
+**Review verification** — `PATCH /api/admin/verifications/:verificationId`
 
 Approve:
 ```json
 { "status": "APPROVED" }
 ```
-Sets video status to `APPROVED` and user `isProfileVerified` to `true`.
+Sets submission status to `APPROVED` and user `isProfileVerified` to `true`.
 
 Reject:
 ```json
 {
   "status": "REJECTED",
-  "remark": "Face not clearly visible. Please re-record in good lighting."
+  "remark": "Images unclear. Please re-upload in good lighting."
 }
 ```
-Sets video status to `REJECTED`. `remark` is required and shown to the user on their next status check.
+Sets submission status to `REJECTED`. `remark` is required and shown to the user on their next status check.

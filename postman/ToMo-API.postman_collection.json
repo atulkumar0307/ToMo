@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "tomo-api-collection-v2",
     "name": "ToMo API (Complete)",
-    "description": "# ToMo Backend — Complete API Collection\n\nImport this file **and** an environment file (`ToMo-Local` or `ToMo-Production`) from the same `postman/` folder.\n\n## Quick start\n\n### User flow\n1. **Send OTP** → **Verify OTP** (tokens auto-saved)\n2. **Update Profile** → sets `isProfileCompleted`\n3. **Upload Selfie Video** → **Admin Approve** → `isProfileVerified`\n4. **Create Activity** → lifecycle endpoints\n\n### Admin flow\n1. **Register** (once) → **Login** (tokens auto-saved)\n2. **List Users** (auto-saves `userId` + `verificationId`)\n3. **Approve/Reject Verification**\n\n## Variables (auto-managed)\n| Variable | Set by |\n|----------|--------|\n| `userAccessToken` / `userRefreshToken` | Verify OTP, Refresh Token |\n| `adminAccessToken` / `adminRefreshToken` | Admin Login, Refresh Token |\n| `userId` | List Users, Get Me |\n| `verificationId` | List Users, Get Verification Status |\n| `activityId` | Create Activity |\n| `activityStartTime` / `activityEndTime` | Pre-request on create/update activity |\n\n## Dev OTP\nDefault: `{{devOtp}}` = `000000`\n\n## Response shape\n**Success:** `{ \"success\": true, ...data }`\n**Error:** `{ \"success\": false, \"message\": \"...\" }`",
+    "description": "# ToMo Backend — Complete API Collection\n\nImport this file **and** an environment file (`ToMo-Local` or `ToMo-Production`) from the same `postman/` folder.\n\n## Quick start\n\n### User flow\n1. **Send OTP** → **Verify OTP** (tokens auto-saved)\n2. **Update Profile** → sets `isProfileCompleted`\n3. **Upload Verification Images (3–5)** → **Admin Approve** → `isProfileVerified`\n4. **Create Activity** → lifecycle endpoints\n\n### Admin flow\n1. **Register** (once) → **Login** (tokens auto-saved)\n2. **List Users** (auto-saves `userId` + `verificationId`)\n3. **Approve/Reject Verification**\n\n## Variables (auto-managed)\n| Variable | Set by |\n|----------|--------|\n| `userAccessToken` / `userRefreshToken` | Verify OTP, Refresh Token |\n| `adminAccessToken` / `adminRefreshToken` | Admin Login, Refresh Token |\n| `userId` | List Users, Get Me |\n| `verificationId` | List Users, Get Verification Status |\n| `activityId` | Create Activity |\n| `activityStartTime` / `activityEndTime` | Pre-request on create/update activity |\n\n## Dev OTP\nDefault: `{{devOtp}}` = `000000`\n\n## Response shape\n**Success:** `{ \"success\": true, ...data }`\n**Error:** `{ \"success\": false, \"message\": \"...\" }`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -411,10 +411,10 @@
         },
         {
           "name": "verification",
-          "description": "Live selfie video verification (5–10 seconds).",
+          "description": "Profile verification via 3–5 selfie images.",
           "item": [
             {
-              "name": "Upload Selfie Video",
+              "name": "Upload Verification Images",
               "event": [
                 {
                   "listen": "test",
@@ -425,7 +425,8 @@
                       "  const v = pm.response.json().verification;",
                       "  if (v && v.id) pm.collectionVariables.set('verificationId', v.id);",
                       "}",
-                      "pm.test('Status 200 or 201', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+                      "pm.test('Status 200 or 201', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                      "pm.test('Has images array', () => pm.expect(pm.response.json().verification.images).to.be.an('array'));"
                     ]
                   }
                 }
@@ -441,15 +442,39 @@
                   "mode": "formdata",
                   "formdata": [
                     {
-                      "key": "verificationVideo",
+                      "key": "verificationImages",
                       "type": "file",
                       "src": [],
-                      "description": "5–10 sec, MP4/WebM/MOV, max 50MB. Field name must be verificationVideo."
+                      "description": "Image 1 — JPEG/PNG/WebP, max 5MB"
+                    },
+                    {
+                      "key": "verificationImages",
+                      "type": "file",
+                      "src": [],
+                      "description": "Image 2 — JPEG/PNG/WebP, max 5MB"
+                    },
+                    {
+                      "key": "verificationImages",
+                      "type": "file",
+                      "src": [],
+                      "description": "Image 3 — JPEG/PNG/WebP, max 5MB"
+                    },
+                    {
+                      "key": "verificationImages",
+                      "type": "file",
+                      "src": [],
+                      "description": "Image 4 (optional)"
+                    },
+                    {
+                      "key": "verificationImages",
+                      "type": "file",
+                      "src": [],
+                      "description": "Image 5 (optional)"
                     }
                   ]
                 },
-                "url": "{{userBaseUrl}}/verification/video",
-                "description": "## POST /api/user/verification/video\n\n**Auth:** Bearer\n\n### Body (multipart)\n| Field | Required | Rules |\n|-------|----------|-------|\n| `verificationVideo` | Yes | MP4/WebM/MOV, max 50MB, 5–10 sec duration |\n\nCreates `PENDING` submission. Blocked if already `PENDING` or `APPROVED`."
+                "url": "{{userBaseUrl}}/verification",
+                "description": "## POST /api/user/verification\n\n**Auth:** Bearer\n\n### Body (multipart)\n| Field | Required | Rules |\n|-------|----------|-------|\n| `verificationImages` | Yes | 3–5 files, same field name repeated. JPEG/PNG/WebP, max 5MB each |\n\nCreates `PENDING` submission. Blocked if already `PENDING` or `APPROVED`.\n\n**Postman:** Select 3–5 image files for the `verificationImages` fields."
               },
               "response": []
             },
@@ -465,7 +490,8 @@
                       "  const v = pm.response.json().verification;",
                       "  if (v && v.id) pm.collectionVariables.set('verificationId', v.id);",
                       "}",
-                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has images', () => pm.expect(pm.response.json().verification.images).to.be.an('array'));"
                     ]
                   }
                 }
@@ -477,8 +503,40 @@
                 },
                 "method": "GET",
                 "header": [],
-                "url": "{{userBaseUrl}}/verification/video",
-                "description": "## GET /api/user/verification/video\n\n**Auth:** Bearer\n\nReturns latest submission: `status` = `PENDING` | `APPROVED` | `REJECTED`. `remark` shown when rejected."
+                "url": "{{userBaseUrl}}/verification",
+                "description": "## GET /api/user/verification\n\n**Auth:** Bearer\n\nReturns latest submission with `images[]`: `status` = `PENDING` | `APPROVED` | `REJECTED`. `remark` shown when rejected."
+              },
+              "response": []
+            },
+            {
+              "name": "[400] Upload — too few images",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "verificationImages", "type": "file", "src": [] }
+                  ]
+                },
+                "url": "{{userBaseUrl}}/verification",
+                "description": "Expect 400 — minimum 3 images required."
               },
               "response": []
             }
@@ -1223,10 +1281,10 @@
         },
         {
           "name": "verification",
-          "description": "Admin review of selfie verification videos.",
+          "description": "Admin review of verification image submissions.",
           "item": [
             {
-              "name": "Approve Verification Video",
+              "name": "Approve Verification",
               "event": [
                 {
                   "listen": "test",
@@ -1250,13 +1308,13 @@
                   "mode": "raw",
                   "raw": "{\n  \"status\": \"APPROVED\"\n}"
                 },
-                "url": "{{adminBaseUrl}}/verification-videos/{{verificationId}}",
-                "description": "## PATCH /api/admin/verification-videos/:verificationId\n\n**Auth:** Admin Bearer\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `status` | Yes | `APPROVED` or `REJECTED` |\n| `remark` | If REJECTED | Non-empty, max 500 chars |\n\nSets user `isProfileVerified: true` on approve."
+                "url": "{{adminBaseUrl}}/verifications/{{verificationId}}",
+                "description": "## PATCH /api/admin/verifications/:verificationId\n\n**Auth:** Admin Bearer\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `status` | Yes | `APPROVED` or `REJECTED` |\n| `remark` | If REJECTED | Non-empty, max 500 chars |\n\nSets user `isProfileVerified: true` on approve."
               },
               "response": []
             },
             {
-              "name": "Reject Verification Video",
+              "name": "Reject Verification",
               "event": [
                 {
                   "listen": "test",
@@ -1280,7 +1338,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"status\": \"REJECTED\",\n  \"remark\": \"Face not clearly visible. Please re-record in good lighting.\"\n}"
                 },
-                "url": "{{adminBaseUrl}}/verification-videos/{{verificationId}}",
+                "url": "{{adminBaseUrl}}/verifications/{{verificationId}}",
                 "description": "`remark` is **required** when status is `REJECTED`."
               },
               "response": []
@@ -1311,7 +1369,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"status\": \"REJECTED\"\n}"
                 },
-                "url": "{{adminBaseUrl}}/verification-videos/{{verificationId}}"
+                "url": "{{adminBaseUrl}}/verifications/{{verificationId}}"
               },
               "response": []
             }

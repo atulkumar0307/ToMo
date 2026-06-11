@@ -20,7 +20,7 @@ router.patch(
   adminController.updateUserProfile
 );
 router.patch(
-  '/verification-videos/:verificationId',
+  '/verifications/:verificationId',
   adminController.reviewVerification
 );
 

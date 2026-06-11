@@ -5,5 +5,5 @@ dist/
 .DS_Store
 uploads/profiles/*
 !uploads/profiles/.gitkeep
-uploads/verification-videos/*
-!uploads/verification-videos/.gitkeep
+uploads/verification-images/*
+!uploads/verification-images/.gitkeep

@@ -2,6 +2,8 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
+const { VERIFICATION_SUBMISSION_SELECT } = require('../verification/verification.constants');
+
 const ADMIN_USER_SELECT = {
   id: true,
   uid: true,
@@ -18,17 +20,10 @@ const ADMIN_USER_SELECT = {
   dateOfBirthUpdatedAt: true,
   createdAt: true,
   updatedAt: true,
-  verificationVideos: {
+  verificationSubmissions: {
     orderBy: { createdAt: 'desc' },
     take: 1,
-    select: {
-      id: true,
-      videoPath: true,
-      status: true,
-      remark: true,
-      createdAt: true,
-      updatedAt: true,
-    },
+    select: VERIFICATION_SUBMISSION_SELECT,
   },
 };
 

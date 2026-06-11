@@ -147,7 +147,7 @@ const reviewVerification = async (req, res, next) => {
     }
 
     const status = req.body.status.trim().toUpperCase();
-    const verification = await adminService.reviewVerificationVideo(
+    const verification = await adminService.reviewVerificationSubmission(
       req.params.verificationId,
       status,
       req.body.remark
@@ -157,8 +157,8 @@ const reviewVerification = async (req, res, next) => {
       verification,
       message:
         status === 'APPROVED'
-          ? 'Verification video approved successfully'
-          : 'Verification video rejected successfully',
+          ? 'Verification approved successfully'
+          : 'Verification rejected successfully',
     });
   } catch (err) {
     next(err);

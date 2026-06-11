@@ -76,7 +76,7 @@ model User {
   createdAt                 DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   refreshTokens         RefreshToken[]
-  verificationVideos    VerificationVideo[]
+  verificationSubmissions VerificationSubmission[]
   hostedActivities      Activity[]            @relation("HostedActivities")
   activityParticipants  ActivityParticipant[]
 
@@ -130,19 +130,30 @@ model ActivityParticipant {
   @@index([userId])
 }
 
-model VerificationVideo {
-  id        String             @id @default(uuid())
+model VerificationSubmission {
+  id        String               @id @default(uuid())
   userId    String
-  videoPath String
-  status    VerificationStatus @default(PENDING)
+  status    VerificationStatus   @default(PENDING)
   remark    String?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  images    VerificationImage[]
 
   @@index([userId])
   @@index([userId, status])
   @@index([status])
+}
+
+model VerificationImage {
+  id           String                 @id @default(uuid())
+  submissionId String
+  imagePath    String
+  sortOrder    Int
+  createdAt    DateTime               @default(now())
+  submission   VerificationSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
 }
 
 model Otp {

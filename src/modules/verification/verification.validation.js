@@ -1,22 +1,21 @@
-const { MIN_VIDEO_DURATION_SEC, MAX_VIDEO_DURATION_SEC } = require('./verification.constants');
+const { MIN_IMAGES, MAX_IMAGES } = require('./verification.constants');
 
-const validateVideoUpload = (file) => {
-  if (!file) {
-    return 'Verification video is required';
+const validateImageUpload = (files) => {
+  if (!files || files.length === 0) {
+    return 'At least one verification image is required';
   }
 
-  return null;
-};
+  if (files.length < MIN_IMAGES) {
+    return `Upload at least ${MIN_IMAGES} verification images`;
+  }
 
-const validateVideoDuration = (durationSec) => {
-  if (durationSec < MIN_VIDEO_DURATION_SEC || durationSec > MAX_VIDEO_DURATION_SEC) {
-    return `Verification video must be between ${MIN_VIDEO_DURATION_SEC} and ${MAX_VIDEO_DURATION_SEC} seconds`;
+  if (files.length > MAX_IMAGES) {
+    return `Upload at most ${MAX_IMAGES} verification images`;
   }
 
   return null;
 };
 
 module.exports = {
-  validateVideoUpload,
-  validateVideoDuration,
+  validateImageUpload,
 };

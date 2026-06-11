@@ -1,6 +1,7 @@
 const { Router } = require('express');
 const { authenticate } = require('../../middleware/auth');
-const { uploadVerificationVideo } = require('../../middleware/upload');
+const { uploadVerificationImages } = require('../../middleware/upload');
+const { MAX_IMAGES } = require('./verification.constants');
 const verificationController = require('./verification.controller');
 
 const router = Router();
@@ -8,10 +9,10 @@ const router = Router();
 router.use(authenticate);
 
 router.post(
-  '/video',
-  uploadVerificationVideo.single('verificationVideo'),
-  verificationController.uploadVideo
+  '/',
+  uploadVerificationImages.array('verificationImages', MAX_IMAGES),
+  verificationController.uploadImages
 );
-router.get('/video', verificationController.getStatus);
+router.get('/', verificationController.getStatus);
 
 module.exports = router;

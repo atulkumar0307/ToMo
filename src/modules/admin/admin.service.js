@@ -1,7 +1,7 @@
 const { VerificationStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
-const { VERIFICATION_VIDEO_SELECT } = require('../verification/verification.constants');
+const { VERIFICATION_SUBMISSION_SELECT } = require('../verification/verification.constants');
 const {
   DEFAULT_PAGE,
   DEFAULT_LIMIT,
@@ -39,8 +39,8 @@ const listUsers = async (query = {}) => {
   return {
     users: users.map((user) => ({
       ...user,
-      latestVerification: user.verificationVideos[0] || null,
-      verificationVideos: undefined,
+      latestVerification: user.verificationSubmissions[0] || null,
+      verificationSubmissions: undefined,
     })),
     pagination: {
       page,
@@ -68,8 +68,8 @@ const setUserBlockStatus = async (userId, isBlocked) => {
 
   return {
     ...user,
-    latestVerification: user.verificationVideos[0] || null,
-    verificationVideos: undefined,
+    latestVerification: user.verificationSubmissions[0] || null,
+    verificationSubmissions: undefined,
   };
 };
 
@@ -95,13 +95,13 @@ const updateUserProfile = async (userId, data) => {
 
   return {
     ...user,
-    latestVerification: user.verificationVideos[0] || null,
-    verificationVideos: undefined,
+    latestVerification: user.verificationSubmissions[0] || null,
+    verificationSubmissions: undefined,
   };
 };
 
 const findPendingVerificationOrThrow = async (verificationId) => {
-  const verification = await prisma.verificationVideo.findUnique({
+  const verification = await prisma.verificationSubmission.findUnique({
     where: { id: verificationId },
     include: {
       user: {
@@ -111,28 +111,28 @@ const findPendingVerificationOrThrow = async (verificationId) => {
   });
 
   if (!verification) {
-    throw new AppError('Verification video not found', 404);
+    throw new AppError('Verification submission not found', 404);
   }
 
   if (verification.status !== VerificationStatus.PENDING) {
-    throw new AppError('Only pending verification videos can be reviewed', 409);
+    throw new AppError('Only pending verification submissions can be reviewed', 409);
   }
 
   return verification;
 };
 
-const reviewVerificationVideo = async (verificationId, status, remark) => {
+const reviewVerificationSubmission = async (verificationId, status, remark) => {
   const verification = await findPendingVerificationOrThrow(verificationId);
 
   if (status === VerificationStatus.APPROVED) {
     return prisma.$transaction(async (tx) => {
-      const updatedVerification = await tx.verificationVideo.update({
+      const updatedVerification = await tx.verificationSubmission.update({
         where: { id: verification.id },
         data: {
           status: VerificationStatus.APPROVED,
           remark: null,
         },
-        select: VERIFICATION_VIDEO_SELECT,
+        select: VERIFICATION_SUBMISSION_SELECT,
       });
 
       await tx.user.update({
@@ -144,13 +144,13 @@ const reviewVerificationVideo = async (verificationId, status, remark) => {
     });
   }
 
-  return prisma.verificationVideo.update({
+  return prisma.verificationSubmission.update({
     where: { id: verification.id },
     data: {
       status: VerificationStatus.REJECTED,
       remark: remark.trim(),
     },
-    select: VERIFICATION_VIDEO_SELECT,
+    select: VERIFICATION_SUBMISSION_SELECT,
   });
 };
 
@@ -158,5 +158,5 @@ module.exports = {
   listUsers,
   setUserBlockStatus,
   updateUserProfile,
-  reviewVerificationVideo,
+  reviewVerificationSubmission,
 };

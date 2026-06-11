@@ -1,25 +1,26 @@
 const { AppError } = require('../../utils/errors');
 const { sendSuccess } = require('../../utils/response');
 const verificationService = require('./verification.service');
-const { validateVideoUpload } = require('./verification.validation');
+const { validateImageUpload } = require('./verification.validation');
 
-const uploadVideo = async (req, res, next) => {
+const uploadImages = async (req, res, next) => {
   try {
-    const validationError = validateVideoUpload(req.file);
+    const validationError = validateImageUpload(req.files);
     if (validationError) {
+      verificationService.removeUploadedFiles(req.files);
       throw new AppError(validationError, 400);
     }
 
-    const verification = await verificationService.uploadVerificationVideo(
+    const verification = await verificationService.uploadVerificationImages(
       req.userId,
-      req.file
+      req.files
     );
 
     return sendSuccess(
       res,
       {
         verification,
-        message: 'Verification video uploaded successfully. It is pending admin review.',
+        message: 'Verification images uploaded successfully. Pending admin review.',
       },
       201
     );
@@ -38,6 +39,6 @@ const getStatus = async (req, res, next) => {
 };
 
 module.exports = {
-  uploadVideo,
+  uploadImages,
   getStatus,
 };
