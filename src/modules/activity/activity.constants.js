@@ -1,4 +1,4 @@
-const { ActivityCategory } = require('@prisma/client');
+const { ActivityCategory, ActivityStatus } = require('@prisma/client');
 
 const TITLE_MIN = 5;
 const TITLE_MAX = 100;
@@ -15,6 +15,14 @@ const ALLOWED_CATEGORIES = Object.values(ActivityCategory);
 
 const DISCOVERY_STATUSES = ['PUBLISHED'];
 
+const SCHEDULE_BLOCKING_STATUSES = [
+  ActivityStatus.PUBLISHED,
+  ActivityStatus.ACTIVE,
+];
+
+const HOST_SCHEDULE_BLOCKING_STATUSES = SCHEDULE_BLOCKING_STATUSES;
+const JOINER_SCHEDULE_BLOCKING_STATUSES = SCHEDULE_BLOCKING_STATUSES;
+
 const ACTIVITY_HOST_SELECT = {
   uid: true,
   fullName: true,
@@ -22,8 +30,28 @@ const ACTIVITY_HOST_SELECT = {
   isProfileVerified: true,
 };
 
+const PARTICIPANT_USER_SELECT = {
+  uid: true,
+  fullName: true,
+  profileImagePath: true,
+  isProfileVerified: true,
+};
+
+const PARTICIPANT_SELECT = {
+  id: true,
+  userId: true,
+  status: true,
+  isHost: true,
+  createdAt: true,
+  updatedAt: true,
+  user: {
+    select: PARTICIPANT_USER_SELECT,
+  },
+};
+
 const ACTIVITY_SELECT = {
   id: true,
+  aid: true,
   hostId: true,
   title: true,
   description: true,
@@ -62,6 +90,11 @@ module.exports = {
   MAX_START_WINDOW_MS,
   ALLOWED_CATEGORIES,
   DISCOVERY_STATUSES,
+  SCHEDULE_BLOCKING_STATUSES,
+  HOST_SCHEDULE_BLOCKING_STATUSES,
+  JOINER_SCHEDULE_BLOCKING_STATUSES,
   ACTIVITY_HOST_SELECT,
+  PARTICIPANT_USER_SELECT,
+  PARTICIPANT_SELECT,
   ACTIVITY_SELECT,
 };

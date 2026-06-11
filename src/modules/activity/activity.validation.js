@@ -286,9 +286,18 @@ const validateListQuery = (query) => {
   return { data: { page, limit } };
 };
 
+const validateParticipantUserId = (userId) => {
+  if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+    return 'Participant user id is required';
+  }
+
+  return null;
+};
+
 module.exports = {
   validateCreateActivity,
   validateUpdateActivity,
   validateDiscoveryQuery,
   validateListQuery,
+  validateParticipantUserId,
 };

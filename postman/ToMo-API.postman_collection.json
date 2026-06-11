@@ -19,7 +19,10 @@
     { "key": "verificationId", "value": "" },
     { "key": "activityId", "value": "" },
     { "key": "activityStartTime", "value": "" },
-    { "key": "activityEndTime", "value": "" }
+    { "key": "activityEndTime", "value": "" },
+    { "key": "joinerUserId", "value": "" },
+    { "key": "activityAid", "value": "" },
+    { "key": "activityCode", "value": "" }
   ],
   "event": [
     {
@@ -678,9 +681,12 @@
                       "if (pm.response.code === 201) {",
                       "  const a = pm.response.json().activity;",
                       "  if (a && a.id) pm.collectionVariables.set('activityId', a.id);",
+                      "  if (a && a.aid) pm.collectionVariables.set('activityAid', String(a.aid));",
+                      "  if (a && a.activityCode) pm.collectionVariables.set('activityCode', a.activityCode);",
                       "}",
                       "pm.test('Status 201', () => pm.response.to.have.status(201));",
                       "pm.test('Status PUBLISHED', () => pm.expect(pm.response.json().activity.status).to.eql('PUBLISHED'));",
+                      "pm.test('Has activityCode ACT-*', () => pm.expect(pm.response.json().activity.activityCode).to.match(/^ACT-\\d+$/));",
                       "pm.test('approvedCount is 1', () => pm.expect(pm.response.json().activity.approvedCount).to.eql(1));"
                     ]
                   }
@@ -698,7 +704,7 @@
                   "raw": "{\n  \"title\": \"Coffee after work\",\n  \"description\": \"Quick coffee near office. Casual chat welcome.\",\n  \"category\": \"COFFEE\",\n  \"locationName\": \"Blue Tokai Saket\",\n  \"address\": \"Select Citywalk, Saket\",\n  \"city\": \"Delhi\",\n  \"latitude\": 28.5244,\n  \"longitude\": 77.2066,\n  \"startTime\": \"{{activityStartTime}}\",\n  \"endTime\": \"{{activityEndTime}}\",\n  \"maxParticipants\": 4\n}"
                 },
                 "url": "{{userBaseUrl}}/activities",
-                "description": "## POST /api/user/activities\n\n**Auth:** Bearer (verified profile)\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `title` | Yes | 5–100 chars |\n| `description` | Yes | 10–1000 chars |\n| `category` | Yes | See categories below |\n| `locationName` | Yes | Max 200 chars |\n| `address` | No | Max 500 chars |\n| `city` | No | Max 100 chars |\n| `latitude` | Yes | -90 to 90 |\n| `longitude` | Yes | -180 to 180 |\n| `startTime` | Yes | ISO datetime, 30min–24h from now |\n| `endTime` | Yes | After startTime, duration 30min–8h |\n| `maxParticipants` | Yes | 2 (single) or 3–20 (group) |\n\n**Categories:** COFFEE, WALKING, SPORTS, GYM, STUDY, COWORKING, DINING, TRAVEL, ENTERTAINMENT, OTHER\n\nTimes auto-set in pre-request script (45min from now, 1h duration)."
+                "description": "## POST /api/user/activities\n\n**Auth:** Bearer (verified profile)\n\n### Body validation\n| Field | Required | Rules |\n|-------|----------|-------|\n| `title` | Yes | 5–100 chars |\n| `description` | Yes | 10–1000 chars |\n| `category` | Yes | See categories below |\n| `locationName` | Yes | Max 200 chars |\n| `address` | No | Max 500 chars |\n| `city` | No | Max 100 chars |\n| `latitude` | Yes | -90 to 90 |\n| `longitude` | Yes | -180 to 180 |\n| `startTime` | Yes | ISO datetime, 30min–24h from now |\n| `endTime` | Yes | After startTime, duration 30min–8h |\n| `maxParticipants` | Yes | 2 (single) or 3–20 (group) |\n\n**Categories:** COFFEE, WALKING, SPORTS, GYM, STUDY, COWORKING, DINING, TRAVEL, ENTERTAINMENT, OTHER\n\nHost cannot overlap another hosted PUBLISHED/ACTIVE activity (409). Times auto-set in pre-request script (45min from now, 1h duration)."
               },
               "response": []
             },
@@ -725,9 +731,12 @@
                       "if (pm.response.code === 201) {",
                       "  const a = pm.response.json().activity;",
                       "  if (a && a.id) pm.collectionVariables.set('activityId', a.id);",
+                      "  if (a && a.aid) pm.collectionVariables.set('activityAid', String(a.aid));",
+                      "  if (a && a.activityCode) pm.collectionVariables.set('activityCode', a.activityCode);",
                       "}",
                       "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                      "pm.test('Single activity', () => pm.expect(pm.response.json().activity.maxParticipants).to.eql(2));"
+                      "pm.test('Single activity', () => pm.expect(pm.response.json().activity.maxParticipants).to.eql(2));",
+                      "pm.test('Has activityCode', () => pm.expect(pm.response.json().activity.activityCode).to.match(/^ACT-\\d+$/));"
                     ]
                   }
                 }
@@ -757,7 +766,8 @@
                     "type": "text/javascript",
                     "exec": [
                       "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                      "pm.test('Has activity', () => pm.expect(pm.response.json().activity).to.be.an('object'));"
+                      "pm.test('Has activity', () => pm.expect(pm.response.json().activity).to.be.an('object'));",
+                      "pm.test('Has myParticipation field', () => pm.expect(pm.response.json()).to.have.property('myParticipation'));"
                     ]
                   }
                 }
@@ -770,7 +780,130 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{userBaseUrl}}/activities/{{activityId}}",
-                "description": "## GET /api/user/activities/:id\n\n**Auth:** Bearer\n\nVisibility: `PUBLISHED` (anyone), `DELETED` (host only), `CANCELLED`/`EXPIRED`/`ACTIVE`/`COMPLETED` (host + participants)."
+                "description": "## GET /api/user/activities/:id\n\n**Auth:** Bearer\n\nReturns `activity` + `myParticipation`. Visibility: `PUBLISHED` (anyone), `DELETED` (host only), `CANCELLED`/`EXPIRED`/`ACTIVE`/`COMPLETED` (host + participants)."
+              },
+              "response": []
+            },
+            {
+              "name": "Request Join",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                      "pm.test('PENDING status', () => pm.expect(pm.response.json().participantStatus).to.eql('PENDING'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/join",
+                "description": "## POST /api/user/activities/:id/join\n\n**Auth:** Bearer (verified user)\n\nActivity must be PUBLISHED, not full, not ended. Joiner cannot already be APPROVED for another overlapping PUBLISHED/ACTIVE activity (409). Use a second verified user token (not the host)."
+              },
+              "response": []
+            },
+            {
+              "name": "Withdraw Join Request",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('WITHDRAWN status', () => pm.expect(pm.response.json().participantStatus).to.eql('WITHDRAWN'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/withdraw",
+                "description": "Withdraw own PENDING join request."
+              },
+              "response": []
+            },
+            {
+              "name": "List Participants (Host)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 200) {",
+                      "  const json = pm.response.json();",
+                      "  if (json.pending && json.pending.length > 0) {",
+                      "    pm.collectionVariables.set('joinerUserId', json.pending[0].userId);",
+                      "  }",
+                      "}",
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/participants",
+                "description": "Host only. Auto-saves first pending userId to joinerUserId."
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Participant (Host)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Participant APPROVED', () => pm.expect(pm.response.json().participant.status).to.eql('APPROVED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/participants/{{joinerUserId}}/approve",
+                "description": "Host approves PENDING joiner. Set joinerUserId from List Participants. Fails with 409 if joiner is already APPROVED for another overlapping PUBLISHED/ACTIVE activity."
+              },
+              "response": []
+            },
+            {
+              "name": "Reject Participant (Host)",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/participants/{{joinerUserId}}/reject",
+                "description": "Host rejects PENDING joiner."
               },
               "response": []
             },

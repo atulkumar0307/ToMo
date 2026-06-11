@@ -6,6 +6,7 @@ const {
   validateUpdateActivity,
   validateDiscoveryQuery,
   validateListQuery,
+  validateParticipantUserId,
 } = require('./activity.validation');
 
 const createActivity = async (req, res, next) => {
@@ -108,9 +109,95 @@ const completeActivity = async (req, res, next) => {
 
 const getActivity = async (req, res, next) => {
   try {
-    const activity = await activityService.getActivityById(req.userId, req.params.id);
+    const result = await activityService.getActivityById(req.userId, req.params.id);
 
-    return sendSuccess(res, { activity });
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const joinActivity = async (req, res, next) => {
+  try {
+    const result = await activityService.joinActivity(req.userId, req.params.id);
+
+    return sendSuccess(
+      res,
+      {
+        ...result,
+        message: 'Join request sent successfully',
+      },
+      201
+    );
+  } catch (err) {
+    next(err);
+  }
+};
+
+const withdrawJoinRequest = async (req, res, next) => {
+  try {
+    const result = await activityService.withdrawJoinRequest(req.userId, req.params.id);
+
+    return sendSuccess(res, {
+      ...result,
+      message: 'Join request withdrawn successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const listParticipants = async (req, res, next) => {
+  try {
+    const result = await activityService.listActivityParticipants(req.userId, req.params.id);
+
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const approveParticipant = async (req, res, next) => {
+  try {
+    const paramError = validateParticipantUserId(req.params.userId);
+
+    if (paramError) {
+      throw new AppError(paramError, 400);
+    }
+
+    const result = await activityService.approveParticipant(
+      req.userId,
+      req.params.id,
+      req.params.userId
+    );
+
+    return sendSuccess(res, {
+      ...result,
+      message: 'Participant approved successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const rejectParticipant = async (req, res, next) => {
+  try {
+    const paramError = validateParticipantUserId(req.params.userId);
+
+    if (paramError) {
+      throw new AppError(paramError, 400);
+    }
+
+    const result = await activityService.rejectParticipant(
+      req.userId,
+      req.params.id,
+      req.params.userId
+    );
+
+    return sendSuccess(res, {
+      ...result,
+      message: 'Participant rejected successfully',
+    });
   } catch (err) {
     next(err);
   }
@@ -162,6 +249,11 @@ module.exports = {
   startActivity,
   completeActivity,
   getActivity,
+  joinActivity,
+  withdrawJoinRequest,
+  listParticipants,
+  approveParticipant,
+  rejectParticipant,
   listDiscovery,
   listHosted,
   listJoined,

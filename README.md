@@ -91,6 +91,11 @@ Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activi
 | POST   | `/api/user/activities/:id/cancel` | Bearer |
 | POST   | `/api/user/activities/:id/start` | Bearer |
 | POST   | `/api/user/activities/:id/complete` | Bearer |
+| POST   | `/api/user/activities/:id/join` | Bearer (verified) |
+| POST   | `/api/user/activities/:id/withdraw` | Bearer |
+| GET    | `/api/user/activities/:id/participants` | Bearer (host) |
+| POST   | `/api/user/activities/:id/participants/:userId/approve` | Bearer (host) |
+| POST   | `/api/user/activities/:id/participants/:userId/reject` | Bearer (host) |
 | POST   | `/api/admin/register`    | No       |
 | POST   | `/api/admin/login`       | No       |
 | POST   | `/api/admin/refresh-token` | No     |
@@ -160,6 +165,10 @@ Uploaded images are stored under `uploads/profiles/` and exposed at `/uploads/pr
 
 Publishes immediately as `PUBLISHED`. Host is auto-added as first approved participant.
 
+Each activity gets a numeric `aid` (starting from 1) and a display code `activityCode` in responses (e.g. `ACT-1`, `ACT-2`). The UUID `id` is still used in API URLs.
+
+Host cannot create (or edit into) a time slot that overlaps another hosted activity in `PUBLISHED` or `ACTIVE` status (`409` if conflict).
+
 ```json
 {
   "title": "Coffee after work",
@@ -190,7 +199,29 @@ All activities created by the host (including `DELETED`).
 
 #### Joined list — `GET /api/user/activities/mine/joined`
 
-Activities the user joined (pending/approved). Includes `CANCELLED`, `EXPIRED`, `ACTIVE`, `COMPLETED`.
+Activities the user requested or joined. Each item includes `participantStatus` (`PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN`, `EXPIRED`).
+
+#### Activity detail — `GET /api/user/activities/:id`
+
+Returns `activity` plus `myParticipation` (`status`, `isHost`) for the logged-in user.
+
+#### Join flow (joiner)
+
+| Action | Endpoint | Rules |
+| ------ | -------- | ----- |
+| Request join | `POST /api/user/activities/:id/join` | Verified user; activity `PUBLISHED`; not host; not full; `now < endTime`; no other approved join overlapping this time (`409`) |
+| Withdraw | `POST /api/user/activities/:id/withdraw` | Own `PENDING` request only |
+| Re-request | `POST /join` again | Allowed after `REJECTED`, `WITHDRAWN`, or `EXPIRED` |
+
+#### Join flow (host)
+
+| Action | Endpoint | Rules |
+| ------ | -------- | ----- |
+| List requests | `GET /api/user/activities/:id/participants` | Returns `pending[]` and `approved[]` (non-host) |
+| Approve | `POST /api/user/activities/:id/participants/:userId/approve` | `PENDING` → `APPROVED` if spots left; joiner must not already be approved for another overlapping `PUBLISHED`/`ACTIVE` activity (`409`) |
+| Reject | `POST /api/user/activities/:id/participants/:userId/reject` | `PENDING` → `REJECTED` |
+
+Pending join requests are auto-marked `EXPIRED` when the activity expires unstarted.
 
 #### Lifecycle (host)
 
