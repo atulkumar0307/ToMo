@@ -544,7 +544,7 @@
         },
         {
           "name": "activities",
-          "description": "Location-based activities. **Verified profile required** for create and discovery.",
+          "description": "Location-based activities. **Verified profile required** for create only. Any logged-in user can browse discovery.",
           "item": [
             {
               "name": "List Discovery",
@@ -583,7 +583,7 @@
                     { "key": "radiusKm", "value": "10", "disabled": true, "description": "Max 100" }
                   ]
                 },
-                "description": "## GET /api/user/activities\n\n**Auth:** Bearer (verified profile)\n\nReturns `PUBLISHED` activities only.\n\n### Query params\n| Param | Rules |\n|-------|-------|\n| `page` | ≥ 1 |\n| `limit` | 1–50 |\n| `category` | Valid ActivityCategory |\n| `size` | `single` or `group` |\n| `city` | String |\n| `latitude`+`longitude`+`radiusKm` | All three required together |"
+                "description": "## GET /api/user/activities\n\n**Auth:** Bearer (any logged-in user, verified not required)\n\nReturns `PUBLISHED` activities only.\n\n### Query params\n| Param | Rules |\n|-------|-------|\n| `page` | ≥ 1 |\n| `limit` | 1–50 |\n| `category` | Valid ActivityCategory |\n| `size` | `single` or `group` |\n| `city` | String |\n| `latitude`+`longitude`+`radiusKm` | All three required together |"
               },
               "response": []
             },

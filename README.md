@@ -148,7 +148,9 @@ Uploaded images are stored under `uploads/profiles/` and exposed at `/uploads/pr
 
 ### Activities
 
-Verified profile required for all activity endpoints (`isProfileVerified: true`).
+**View/browse activities:** any logged-in user (discovery, get by id, my hosted/joined).
+
+**Create activity:** verified profile required (`isProfileVerified: true`).
 
 **Single vs group:** no separate field — `maxParticipants: 2` = single, `3–20` = group. Filter discovery with `?size=single` or `?size=group`.
 

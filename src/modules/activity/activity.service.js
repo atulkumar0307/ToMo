@@ -347,18 +347,7 @@ const buildDiscoveryWhere = (filters) => {
   return where;
 };
 
-const listDiscoveryActivities = async (userId, { page, limit, filters }) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { isBlocked: true, isProfileVerified: true },
-  });
-
-  if (!user) {
-    throw new AppError('User not found', 404);
-  }
-
-  assertVerifiedProfile(user);
-
+const listDiscoveryActivities = async (_userId, { page, limit, filters }) => {
   const where = buildDiscoveryWhere(filters);
   const skip = (page - 1) * limit;
 
