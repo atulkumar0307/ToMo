@@ -1413,6 +1413,53 @@
           ]
         },
         {
+          "name": "activities",
+          "description": "Admin activity listing.",
+          "item": [
+            {
+              "name": "List Activities",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has activities array', () => pm.expect(pm.response.json().activities).to.be.an('array'));",
+                      "pm.test('Has pagination', () => pm.expect(pm.response.json().pagination).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{adminAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{adminBaseUrl}}/activities?page=1&limit=20",
+                  "host": ["{{adminBaseUrl}}"],
+                  "path": ["activities"],
+                  "query": [
+                    { "key": "page", "value": "1", "description": "≥ 1" },
+                    { "key": "limit", "value": "20", "description": "1–100" },
+                    {
+                      "key": "status",
+                      "value": "PUBLISHED",
+                      "description": "Optional: PUBLISHED | DELETED | CANCELLED | ACTIVE | COMPLETED | EXPIRED",
+                      "disabled": true
+                    }
+                  ]
+                },
+                "description": "## GET /api/admin/activities\n\n**Auth:** Admin Bearer\n\nReturns all activities (all statuses) when `status` is omitted. Enable `status` query param to filter.\n\nEach activity includes `activityCode`, `approvedCount`, `pendingCount`, and `spotsLeft`."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "verification",
           "description": "Admin review of verification image submissions.",
           "item": [

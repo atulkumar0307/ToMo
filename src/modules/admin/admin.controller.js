@@ -4,6 +4,7 @@ const adminService = require('./admin.service');
 const adminAuthService = require('./admin.auth.service');
 const {
   validateListUsers,
+  validateListActivities,
   validateUserIdParam,
   validateVerificationIdParam,
   validateBlockUser,
@@ -66,6 +67,20 @@ const logout = async (req, res, next) => {
 
     await adminAuthService.logoutAdmin(req.body.refreshToken);
     return sendSuccess(res, { message: 'Logged out successfully' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const listActivities = async (req, res, next) => {
+  try {
+    const validationError = validateListActivities(req.query);
+    if (validationError) {
+      throw new AppError(validationError, 400);
+    }
+
+    const result = await adminService.listActivities(req.query);
+    return sendSuccess(res, result);
   } catch (err) {
     next(err);
   }
@@ -170,6 +185,7 @@ module.exports = {
   login,
   refreshToken,
   logout,
+  listActivities,
   listUsers,
   blockUser,
   updateUserProfile,

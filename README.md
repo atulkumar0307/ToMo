@@ -55,6 +55,7 @@ src/
 
 /api/admin/auth/...        (register, login, refresh-token, logout)
 /api/admin/users/...
+/api/admin/activities/...
 /api/admin/verifications/...
 ```
 
@@ -100,6 +101,7 @@ Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activi
 | POST   | `/api/admin/login`       | No       |
 | POST   | `/api/admin/refresh-token` | No     |
 | POST   | `/api/admin/logout`      | No       |
+| GET    | `/api/admin/activities`  | Admin Bearer |
 | GET    | `/api/admin/users`       | Admin Bearer |
 | PATCH  | `/api/admin/users/:userId/block` | Admin Bearer |
 | PATCH  | `/api/admin/users/:userId/profile` | Admin Bearer |
@@ -261,6 +263,10 @@ Returns `accessToken`, `refreshToken`, and `admin` object. Use `Authorization: B
 **List users** — `GET /api/admin/users?page=1&limit=20`
 
 Returns users with `latestVerification` (most recent image submission).
+
+**List activities** — `GET /api/admin/activities?page=1&limit=20&status=PUBLISHED`
+
+Returns all activities (every status by default). Optional `status` filter: `PUBLISHED` | `DELETED` | `CANCELLED` | `ACTIVE` | `COMPLETED` | `EXPIRED`. Each item includes `activityCode`, `approvedCount`, `pendingCount`, and `spotsLeft`.
 
 **Block / unblock user** — `PATCH /api/admin/users/:userId/block`
 

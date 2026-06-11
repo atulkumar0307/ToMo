@@ -12,6 +12,7 @@ router.post('/logout', adminController.logout);
 
 router.use(authenticateAdmin);
 
+router.get('/activities', adminController.listActivities);
 router.get('/users', adminController.listUsers);
 router.patch('/users/:userId/block', adminController.blockUser);
 router.patch(

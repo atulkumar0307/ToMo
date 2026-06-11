@@ -1,6 +1,8 @@
 const { VerificationStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
+const { ACTIVITY_SELECT } = require('../activity/activity.constants');
+const { formatActivityResponse } = require('../activity/activity.service');
 const { VERIFICATION_SUBMISSION_SELECT } = require('../verification/verification.constants');
 const {
   DEFAULT_PAGE,
@@ -19,6 +21,43 @@ const findUserOrThrow = async (userId) => {
   }
 
   return user;
+};
+
+const listActivities = async (query = {}) => {
+  const page = query.page ? parseInt(query.page, 10) : DEFAULT_PAGE;
+  const limit = query.limit ? parseInt(query.limit, 10) : DEFAULT_LIMIT;
+  const skip = (page - 1) * limit;
+
+  const where = {};
+
+  if (query.status) {
+    where.status = String(query.status).trim().toUpperCase();
+  }
+
+  const [activities, total] = await Promise.all([
+    prisma.activity.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      select: ACTIVITY_SELECT,
+    }),
+    prisma.activity.count({ where }),
+  ]);
+
+  const formatted = await Promise.all(
+    activities.map((activity) => formatActivityResponse(activity))
+  );
+
+  return {
+    activities: formatted,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
 };
 
 const listUsers = async (query = {}) => {
@@ -155,6 +194,7 @@ const reviewVerificationSubmission = async (verificationId, status, remark) => {
 };
 
 module.exports = {
+  listActivities,
   listUsers,
   setUserBlockStatus,
   updateUserProfile,

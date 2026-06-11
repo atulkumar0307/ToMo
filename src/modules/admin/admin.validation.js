@@ -1,3 +1,4 @@
+const { ActivityStatus } = require('@prisma/client');
 const {
   validateName,
   validateGender,
@@ -5,6 +6,7 @@ const {
   validateBio,
   buildProfileUpdateData,
 } = require('../profile/profile.validation');
+const { DEFAULT_PAGE, DEFAULT_LIMIT, MAX_LIMIT } = require('./admin.constants');
 const { validateOptionalMobile } = require('../auth/auth.validation');
 
 const UPDATABLE_PROFILE_FIELDS = [
@@ -17,16 +19,40 @@ const UPDATABLE_PROFILE_FIELDS = [
   'isProfileVerified',
 ];
 
-const validateListUsers = (query) => {
-  const page = query.page !== undefined ? parseInt(query.page, 10) : 1;
-  const limit = query.limit !== undefined ? parseInt(query.limit, 10) : 20;
+const ALLOWED_ACTIVITY_STATUSES = Object.values(ActivityStatus);
+
+const validatePaginationQuery = (query) => {
+  const page = query.page !== undefined ? parseInt(query.page, 10) : DEFAULT_PAGE;
+  const limit = query.limit !== undefined ? parseInt(query.limit, 10) : DEFAULT_LIMIT;
 
   if (Number.isNaN(page) || page < 1) {
     return 'Page must be a positive integer';
   }
 
-  if (Number.isNaN(limit) || limit < 1 || limit > 100) {
-    return 'Limit must be between 1 and 100';
+  if (Number.isNaN(limit) || limit < 1 || limit > MAX_LIMIT) {
+    return `Limit must be between 1 and ${MAX_LIMIT}`;
+  }
+
+  return null;
+};
+
+const validateListUsers = (query) => validatePaginationQuery(query);
+
+const validateListActivities = (query) => {
+  const paginationError = validatePaginationQuery(query);
+
+  if (paginationError) {
+    return paginationError;
+  }
+
+  if (query.status === undefined || query.status === null || query.status === '') {
+    return null;
+  }
+
+  const normalized = String(query.status).trim().toUpperCase();
+
+  if (!ALLOWED_ACTIVITY_STATUSES.includes(normalized)) {
+    return `Invalid status. Allowed values: ${ALLOWED_ACTIVITY_STATUSES.join(', ')}`;
   }
 
   return null;
@@ -234,6 +260,7 @@ const validateAdminRefreshToken = (body) => {
 
 module.exports = {
   validateListUsers,
+  validateListActivities,
   validateUserIdParam,
   validateVerificationIdParam,
   validateBlockUser,
