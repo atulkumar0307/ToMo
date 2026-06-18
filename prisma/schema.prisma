@@ -54,6 +54,17 @@ enum ParticipantStatus {
   EXPIRED
 }
 
+enum HighlightStatus {
+  PUBLISHED
+  DRAFT
+  DELETED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
 model Counter {
   id    String @id
   value Int    @default(0)
@@ -79,6 +90,7 @@ model User {
   verificationSubmissions VerificationSubmission[]
   hostedActivities      Activity[]            @relation("HostedActivities")
   activityParticipants  ActivityParticipant[]
+  highlights            Highlight[]
 
   @@index([mobile])
 }
@@ -108,6 +120,7 @@ model Activity {
   updatedAt       DateTime         @updatedAt
   host            User             @relation("HostedActivities", fields: [hostId], references: [id], onDelete: Cascade)
   participants    ActivityParticipant[]
+  highlights      Highlight[]
 
   @@index([hostId])
   @@index([aid])
@@ -208,4 +221,42 @@ model AdminRefreshToken {
   @@index([adminId])
   @@index([token])
   @@index([expiresAt])
+}
+
+model Highlight {
+  id          String          @id @default(uuid())
+  activityId  String
+  userId      String
+  title       String
+  caption     String?
+  description String?
+  tags        String[]        @default([])
+  status      HighlightStatus @default(PUBLISHED)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  activity    Activity        @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaItems  HighlightMediaItem[]
+
+  @@index([activityId])
+  @@index([activityId, status])
+  @@index([userId])
+  @@index([userId, status])
+  @@index([status])
+}
+
+model HighlightMediaItem {
+  id               String    @id @default(uuid())
+  highlightId      String
+  type             MediaType
+  filePath         String
+  thumbnailPath    String?
+  sortOrder        Int
+  durationSeconds  Int?
+  fileSizeBytes    Int?
+  mimeType         String?
+  createdAt        DateTime  @default(now())
+  highlight        Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
+
+  @@index([highlightId])
 }

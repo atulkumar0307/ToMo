@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "tomo-api-collection-v2",
     "name": "ToMo API (Complete)",
-    "description": "# ToMo Backend — Complete API Collection\n\nImport this file **and** an environment file (`ToMo-Local` or `ToMo-Production`) from the same `postman/` folder.\n\n## Quick start\n\n### User flow\n1. **Send OTP** → **Verify OTP** (tokens auto-saved)\n2. **Update Profile** → sets `isProfileCompleted`\n3. **Upload Verification Images (3–5)** → **Admin Approve** → `isProfileVerified`\n4. **Create Activity** → lifecycle endpoints\n\n### Admin flow\n1. **Register** (once) → **Login** (tokens auto-saved)\n2. **List Users** (auto-saves `userId` + `verificationId`)\n3. **Approve/Reject Verification**\n\n## Variables (auto-managed)\n| Variable | Set by |\n|----------|--------|\n| `userAccessToken` / `userRefreshToken` | Verify OTP, Refresh Token |\n| `adminAccessToken` / `adminRefreshToken` | Admin Login, Refresh Token |\n| `userId` | List Users, Get Me |\n| `verificationId` | List Users, Get Verification Status |\n| `activityId` | Create Activity |\n| `activityStartTime` / `activityEndTime` | Pre-request on create/update activity |\n\n## Dev OTP\nDefault: `{{devOtp}}` = `000000`\n\n## Response shape\n**Success:** `{ \"success\": true, ...data }`\n**Error:** `{ \"success\": false, \"message\": \"...\" }`",
+    "description": "# ToMo Backend — Complete API Collection\n\nImport this file **and** an environment file (`ToMo-Local` or `ToMo-Production`) from the same `postman/` folder.\n\n## Quick start\n\n### User flow\n1. **Send OTP** → **Verify OTP** (tokens auto-saved)\n2. **Update Profile** → sets `isProfileCompleted`\n3. **Upload Verification Images (3–5)** → **Admin Approve** → `isProfileVerified`\n4. **Create Activity** → **Start** → **Complete** (lifecycle)\n5. **Create Highlight** (multipart media on completed activity)\n\n### Admin flow\n1. **Register** (once) → **Login** (tokens auto-saved)\n2. **List Users** (auto-saves `userId` + `verificationId`)\n3. **Approve/Reject Verification**\n\n## Variables (auto-managed)\n| Variable | Set by |\n|----------|--------|\n| `userAccessToken` / `userRefreshToken` | Verify OTP, Refresh Token |\n| `adminAccessToken` / `adminRefreshToken` | Admin Login, Refresh Token |\n| `userId` | List Users, Get Me |\n| `verificationId` | List Users, Get Verification Status |\n| `activityId` | Create Activity |\n| `highlightId` | Create Highlight |\n| `activityStartTime` / `activityEndTime` | Pre-request on create/update activity |\n\n## Dev OTP\nDefault: `{{devOtp}}` = `000000`\n\n## Response shape\n**Success:** `{ \"success\": true, ...data }`\n**Error:** `{ \"success\": false, \"message\": \"...\" }`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -22,7 +22,8 @@
     { "key": "activityEndTime", "value": "" },
     { "key": "joinerUserId", "value": "" },
     { "key": "activityAid", "value": "" },
-    { "key": "activityCode", "value": "" }
+    { "key": "activityCode", "value": "" },
+    { "key": "highlightId", "value": "" }
   ],
   "event": [
     {
@@ -767,7 +768,8 @@
                     "exec": [
                       "pm.test('Status 200', () => pm.response.to.have.status(200));",
                       "pm.test('Has activity', () => pm.expect(pm.response.json().activity).to.be.an('object'));",
-                      "pm.test('Has myParticipation field', () => pm.expect(pm.response.json()).to.have.property('myParticipation'));"
+                      "pm.test('Has myParticipation field', () => pm.expect(pm.response.json()).to.have.property('myParticipation'));",
+                      "pm.test('Has highlightCount', () => pm.expect(pm.response.json().highlightCount).to.be.a('number'));"
                     ]
                   }
                 }
@@ -780,7 +782,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{userBaseUrl}}/activities/{{activityId}}",
-                "description": "## GET /api/user/activities/:id\n\n**Auth:** Bearer\n\nReturns `activity` + `myParticipation`. Visibility: `PUBLISHED` (anyone), `DELETED` (host only), `CANCELLED`/`EXPIRED`/`ACTIVE`/`COMPLETED` (host + participants)."
+                "description": "## GET /api/user/activities/:id\n\n**Auth:** Bearer\n\nReturns `activity` + `myParticipation` + `highlightCount`. Visibility: `PUBLISHED` (anyone), `DELETED` (host only), `CANCELLED`/`EXPIRED`/`ACTIVE`/`COMPLETED` (host + participants)."
               },
               "response": []
             },
@@ -1121,6 +1123,254 @@
                 },
                 "url": "{{userBaseUrl}}/activities",
                 "description": "Run before admin approves verification. Expect 403."
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "highlights",
+          "description": "Media highlights for past activities (`COMPLETED`, `CANCELLED`, `EXPIRED`). Host or approved participant can create. Run **Start** → **Complete** on an activity first.",
+          "item": [
+            {
+              "name": "Create Highlight",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const h = pm.response.json().highlight;",
+                      "  if (h && h.id) pm.collectionVariables.set('highlightId', h.id);",
+                      "}",
+                      "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                      "pm.test('Has highlight', () => pm.expect(pm.response.json().highlight).to.be.an('object'));",
+                      "pm.test('Status PUBLISHED', () => pm.expect(pm.response.json().highlight.status).to.eql('PUBLISHED'));",
+                      "pm.test('Has mediaItems', () => pm.expect(pm.response.json().highlight.mediaItems).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Coffee meetup highlights",
+                      "type": "text",
+                      "description": "Required, max 150 chars"
+                    },
+                    {
+                      "key": "caption",
+                      "value": "Great vibes today",
+                      "type": "text",
+                      "description": "Optional, max 300 chars"
+                    },
+                    {
+                      "key": "description",
+                      "value": "A few moments from our meetup.",
+                      "type": "text",
+                      "description": "Optional, max 1000 chars"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[\"coffee\",\"delhi\"]",
+                      "type": "text",
+                      "description": "Optional JSON array string"
+                    },
+                    {
+                      "key": "media",
+                      "type": "file",
+                      "src": [],
+                      "description": "Image 1 — JPEG/PNG/WebP max 5MB, or MP4/MOV/WEBM max 50MB & 40s"
+                    },
+                    {
+                      "key": "media",
+                      "type": "file",
+                      "src": [],
+                      "description": "Image/video 2 (optional)"
+                    }
+                  ]
+                },
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/highlights",
+                "description": "## POST /api/user/activities/:activityId/highlights\n\n**Auth:** Bearer (host or approved participant)\n\n**When:** Activity status is `COMPLETED`, `CANCELLED`, or `EXPIRED`\n\n### Body (multipart)\n| Field | Required | Rules |\n|-------|----------|-------|\n| `title` | Yes | Max 150 chars |\n| `caption` | No | Max 300 chars |\n| `description` | No | Max 1000 chars |\n| `tags` | No | JSON array string, e.g. `[\"tag1\"]` |\n| `mediaOrder` | No | JSON array of file indices, e.g. `[0,1]` |\n| `media` | Yes | 1–7 files. Images: JPEG/PNG/WebP ≤5MB. Videos: MP4/MOV/WEBM ≤50MB, ≤40s |\n\n**Postman:** Select 1–7 image/video files for the `media` fields. Complete activity lifecycle before testing."
+              },
+              "response": []
+            },
+            {
+              "name": "List Highlights for Activity",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has highlights array', () => pm.expect(pm.response.json().highlights).to.be.an('array'));",
+                      "pm.test('Has pagination', () => pm.expect(pm.response.json().pagination).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/highlights?page=1&limit=20",
+                "description": "## GET /api/user/activities/:activityId/highlights\n\n**Auth:** Bearer\n\nReturns published highlights for the activity, newest first."
+              },
+              "response": []
+            },
+            {
+              "name": "List My Highlights",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has highlights array', () => pm.expect(pm.response.json().highlights).to.be.an('array'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": "{{userBaseUrl}}/highlights/mine?page=1&limit=20",
+                "description": "## GET /api/user/highlights/mine\n\n**Auth:** Bearer\n\nAll published highlights created by the logged-in user."
+              },
+              "response": []
+            },
+            {
+              "name": "Get Highlight",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Has highlight', () => pm.expect(pm.response.json().highlight).to.be.an('object'));",
+                      "pm.test('Has author', () => pm.expect(pm.response.json().highlight.author).to.be.an('object'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "GET",
+                "header": [],
+                "url": "{{userBaseUrl}}/highlights/{{highlightId}}",
+                "description": "## GET /api/user/highlights/:highlightId\n\n**Auth:** Bearer\n\nReturns single highlight with `mediaItems[]` and `author`."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Highlight",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Updated title', () => pm.expect(pm.response.json().highlight.title).to.eql('Updated highlight title'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated highlight title\",\n  \"caption\": \"Updated caption\",\n  \"tags\": [\"updated\", \"coffee\"]\n}"
+                },
+                "url": "{{userBaseUrl}}/highlights/{{highlightId}}",
+                "description": "## PATCH /api/user/highlights/:highlightId\n\n**Auth:** Bearer (author only)\n\nJSON body — metadata only (no new media): `title`, `caption`, `description`, `tags`."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Highlight",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                      "pm.test('Status DELETED', () => pm.expect(pm.response.json().highlight.status).to.eql('DELETED'));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": "{{userBaseUrl}}/highlights/{{highlightId}}",
+                "description": "## DELETE /api/user/highlights/:highlightId\n\n**Auth:** Bearer (author or activity host)\n\nSoft delete — sets `status` to `DELETED`."
+              },
+              "response": []
+            },
+            {
+              "name": "[403] Create Highlight — activity not past",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                      "pm.test('success false', () => pm.expect(pm.response.json().success).to.eql(false));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [{ "key": "token", "value": "{{userAccessToken}}", "type": "string" }]
+                },
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    { "key": "title", "value": "Too early", "type": "text" },
+                    { "key": "media", "type": "file", "src": [] }
+                  ]
+                },
+                "url": "{{userBaseUrl}}/activities/{{activityId}}/highlights",
+                "description": "Run on a `PUBLISHED` or `ACTIVE` activity (before Complete). Expect 403 — highlights only for past activities."
               },
               "response": []
             }

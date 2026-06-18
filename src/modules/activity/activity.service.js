@@ -1,4 +1,4 @@
-const { ActivityStatus, ParticipantStatus } = require('@prisma/client');
+const { ActivityStatus, ParticipantStatus, HighlightStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
 const {
@@ -420,14 +420,21 @@ const getActivityById = async (userId, activityId) => {
   const activity = await fetchActivityById(activityId);
   await assertCanViewActivity(activity, userId);
 
-  const [formatted, myParticipation] = await Promise.all([
+  const [formatted, myParticipation, highlightCount] = await Promise.all([
     formatActivityResponse(activity),
     getMyParticipation(activityId, userId),
+    prisma.highlight.count({
+      where: {
+        activityId,
+        status: HighlightStatus.PUBLISHED,
+      },
+    }),
   ]);
 
   return {
     activity: formatted,
     myParticipation,
+    highlightCount,
   };
 };
 

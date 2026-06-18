@@ -39,6 +39,10 @@ src/
     user.routes.js         # User route group
   modules/
     auth/                  # User OTP + JWT
+    profile/               # User profile
+    verification/          # Selfie verification
+    activity/              # Activities + participants
+    highlight/             # Activity highlights (media posts)
     admin/                 # Admin APIs
   middleware/
     auth.js                # User JWT
@@ -52,6 +56,7 @@ src/
 /api/user/profile/...
 /api/user/verification/...
 /api/user/activities/...
+/api/user/highlights/...
 
 /api/admin/auth/...        (register, login, refresh-token, logout)
 /api/admin/users/...
@@ -66,7 +71,7 @@ Import Postman files from `postman/`:
 
 Postman → **Import** → select all 3 files → choose environment (top-right: **ToMo Local** or **ToMo Production**).
 
-Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activityStartTime`/`activityEndTime` for activity create/update.
+Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activityStartTime`/`activityEndTime` for activity create/update. Highlight requests auto-save `highlightId` after create.
 
 ## API Endpoints
 
@@ -97,6 +102,12 @@ Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activi
 | GET    | `/api/user/activities/:id/participants` | Bearer (host) |
 | POST   | `/api/user/activities/:id/participants/:userId/approve` | Bearer (host) |
 | POST   | `/api/user/activities/:id/participants/:userId/reject` | Bearer (host) |
+| POST   | `/api/user/activities/:activityId/highlights` | Bearer (host or approved participant) |
+| GET    | `/api/user/activities/:activityId/highlights` | Bearer   |
+| GET    | `/api/user/highlights/mine` | Bearer   |
+| GET    | `/api/user/highlights/:highlightId` | Bearer   |
+| PATCH  | `/api/user/highlights/:highlightId` | Bearer (author) |
+| DELETE | `/api/user/highlights/:highlightId` | Bearer (author or host) |
 | POST   | `/api/admin/register`    | No       |
 | POST   | `/api/admin/login`       | No       |
 | POST   | `/api/admin/refresh-token` | No     |
@@ -125,6 +136,8 @@ Only allowlisted actions are accepted (currently: `LOGIN`). Send the same `actio
 4. `POST /api/user/auth/refresh-token` with `{ "refreshToken": "..." }`
 5. `POST /api/user/auth/logout` with `{ "refreshToken": "..." }`
 6. `PATCH /api/user/profile` with Bearer token and profile fields (see below)
+7. After verification + activity lifecycle: `POST .../start` → `POST .../complete`
+8. `POST /api/user/activities/:activityId/highlights` with multipart media (host or approved participant)
 
 ### Profile update
 
@@ -205,7 +218,68 @@ Activities the user requested or joined. Each item includes `participantStatus` 
 
 #### Activity detail — `GET /api/user/activities/:id`
 
-Returns `activity` plus `myParticipation` (`status`, `isHost`) for the logged-in user.
+Returns `activity` plus `myParticipation` (`status`, `isHost`) and `highlightCount` for the logged-in user.
+
+#### Highlights
+
+Post photos/videos after an activity ends. Only for activities in `COMPLETED`, `CANCELLED`, or `EXPIRED` status.
+
+**Who can post:** host or `APPROVED` participant.
+
+**Create** — `POST /api/user/activities/:activityId/highlights` (`multipart/form-data`)
+
+| Field | Type | Notes |
+| ----- | ---- | ----- |
+| `title` | string | Required, max 150 chars |
+| `caption` | string | Optional, max 300 chars |
+| `description` | string | Optional, max 1000 chars |
+| `tags` | string | Optional JSON array, e.g. `["morning_run","coffee"]` |
+| `mediaOrder` | string | Optional JSON array of file indices, e.g. `[0,2,1]` |
+| `media` | file[] | Required, 1–7 files (field name `media`) |
+
+Media: JPEG, PNG, WebP (max 5MB each); MP4, MOV, WEBM (max 50MB, max 40 seconds). Stored under `uploads/highlights/` and exposed at `/uploads/highlights/<filename>`.
+
+**List for activity** — `GET /api/user/activities/:activityId/highlights?page=1&limit=20`
+
+**My highlights** — `GET /api/user/highlights/mine?page=1&limit=20`
+
+**Get / update / delete** — `GET/PATCH/DELETE /api/user/highlights/:highlightId`
+
+Update accepts JSON: `title`, `caption`, `description`, `tags` (author only). Delete: author or activity host (soft delete → `DELETED`).
+
+Example create response:
+
+```json
+{
+  "success": true,
+  "highlight": {
+    "id": "uuid",
+    "activityId": "uuid",
+    "userId": "uuid",
+    "title": "Coffee meetup highlights",
+    "caption": "Great vibes",
+    "description": null,
+    "tags": ["coffee", "delhi"],
+    "status": "PUBLISHED",
+    "mediaItems": [
+      {
+        "id": "uuid",
+        "type": "IMAGE",
+        "url": "/uploads/highlights/photo.jpg",
+        "thumbnailUrl": null,
+        "order": 1,
+        "durationSeconds": null
+      }
+    ],
+    "author": {
+      "uid": 1,
+      "fullName": "User Name",
+      "profileImagePath": "/uploads/profiles/avatar.jpg"
+    }
+  },
+  "message": "Highlight created successfully"
+}
+```
 
 #### Join flow (joiner)
 
@@ -234,6 +308,7 @@ Pending join requests are auto-marked `EXPIRED` when the activity expires unstar
 | Cancel | `POST /api/user/activities/:id/cancel` | `PUBLISHED`, has joiners → `CANCELLED` |
 | Start | `POST /api/user/activities/:id/start` | `PUBLISHED` → `ACTIVE` |
 | Complete | `POST /api/user/activities/:id/complete` | `ACTIVE` → `COMPLETED` |
+| Post highlight | `POST /api/user/activities/:activityId/highlights` | `COMPLETED` / `CANCELLED` / `EXPIRED`; host or approved participant |
 
 Unstarted activities past `endTime` are auto-marked `EXPIRED` (background job, every 60s).
 

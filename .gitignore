@@ -7,3 +7,5 @@ uploads/profiles/*
 !uploads/profiles/.gitkeep
 uploads/verification-images/*
 !uploads/verification-images/.gitkeep
+uploads/highlights/*
+!uploads/highlights/.gitkeep
