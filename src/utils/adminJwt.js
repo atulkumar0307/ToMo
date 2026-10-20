@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const env = require('../config/env');
 
 const generateAdminAccessToken = (adminId) => {
@@ -10,6 +11,7 @@ const generateAdminAccessToken = (adminId) => {
 const generateAdminRefreshToken = (adminId) => {
   return jwt.sign({ adminId }, env.admin.jwt.refreshSecret, {
     expiresIn: env.admin.jwt.refreshExpiresIn,
+    jwtid: crypto.randomUUID(),
   });
 };
 
