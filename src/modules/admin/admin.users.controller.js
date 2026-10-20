@@ -4,6 +4,7 @@ const { logAdminAction, userLabel } = require('../../utils/audit');
 const { removeUploadPaths } = require('../../utils/uploads');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const adminService = require('./admin.service');
+const realtime = require('../../services/realtime');
 const {
   validateUserIdParam,
   validateVerificationIdParam,
@@ -98,6 +99,7 @@ const updateUserProfile = async (req, res, next) => {
     const user = await adminService.updateUserProfile(req.params.userId, data);
     const fields = Object.keys(data);
 
+    realtime.profileUpdated(user.id);
     logUserChange(
       req,
       AUDIT_ACTIONS.ADMIN_USER_UPDATED,
@@ -123,6 +125,8 @@ const blockUser = async (req, res, next) => {
     }
 
     const user = await adminService.setUserBlockStatus(req.params.userId, req.body.isBlocked);
+    if (req.body.isBlocked) realtime.accountBlocked(user.id);
+    else realtime.profileUpdated(user.id);
 
     logUserChange(
       req,
@@ -147,6 +151,7 @@ const removeProfileImage = async (req, res, next) => {
     assertUserParam(req);
     const user = await adminService.removeUserProfileImage(req.params.userId);
 
+    realtime.profileUpdated(user.id);
     logUserChange(
       req,
       AUDIT_ACTIONS.ADMIN_USER_PHOTO_REMOVED,
@@ -285,6 +290,7 @@ const reviewVerification = async (req, res, next) => {
     );
 
     const approved = status === 'APPROVED';
+    realtime.verificationReviewed(user.id, status, verification.remark);
     logAdminAction(
       req,
       approved ? AUDIT_ACTIONS.ADMIN_VERIFICATION_APPROVED : AUDIT_ACTIONS.ADMIN_VERIFICATION_REJECTED,

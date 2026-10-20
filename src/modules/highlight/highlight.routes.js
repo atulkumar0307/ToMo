@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/mine', highlightController.listMyHighlights);
+router.get('/feed', highlightController.listFeed);
 router.get('/:highlightId', highlightController.getHighlight);
 router.patch('/:highlightId', highlightController.updateHighlight);
 router.delete('/:highlightId', highlightController.deleteHighlight);

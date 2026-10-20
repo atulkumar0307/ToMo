@@ -21,6 +21,7 @@ const HIGHLIGHT_AUTHOR_SELECT = {
   uid: true,
   fullName: true,
   profileImagePath: true,
+  isProfileVerified: true,
 };
 
 const HIGHLIGHT_MEDIA_SELECT = {
@@ -54,6 +55,25 @@ const HIGHLIGHT_SELECT = {
   },
 };
 
+/** Highlight + the activity it belongs to (for feeds that mix activities). */
+const HIGHLIGHT_FEED_SELECT = {
+  ...HIGHLIGHT_SELECT,
+  activity: {
+    select: {
+      id: true,
+      aid: true,
+      title: true,
+      category: true,
+      status: true,
+      locationName: true,
+      city: true,
+      startTime: true,
+      endTime: true,
+      hostId: true,
+    },
+  },
+};
+
 const LIST_HIGHLIGHT_STATUSES = [HighlightStatus.PUBLISHED];
 
 module.exports = {
@@ -73,5 +93,6 @@ module.exports = {
   HIGHLIGHT_AUTHOR_SELECT,
   HIGHLIGHT_MEDIA_SELECT,
   HIGHLIGHT_SELECT,
+  HIGHLIGHT_FEED_SELECT,
   LIST_HIGHLIGHT_STATUSES,
 };

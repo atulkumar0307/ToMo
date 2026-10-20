@@ -3,6 +3,7 @@ const { sendSuccess } = require('../../utils/response');
 const { logUserAction, quote } = require('../../utils/audit');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const highlightService = require('./highlight.service');
+const realtime = require('../../services/realtime');
 const {
   validateCreateHighlight,
   validateUpdateHighlight,
@@ -33,13 +34,18 @@ const createHighlight = async (req, res, next) => {
       throw new AppError(validation.error, 400);
     }
 
-    const highlight = await highlightService.createHighlight(
+    const { duplicate, ...highlight } = await highlightService.createHighlight(
       req.userId,
       req.params.activityId,
       validation.data,
       req.files
     );
 
+    if (duplicate) {
+      return sendSuccess(res, { highlight, duplicate: true, message: 'Highlight already posted' });
+    }
+
+    realtime.highlightCreated(highlight);
     logHighlightAction(
       req,
       AUDIT_ACTIONS.HIGHLIGHT_CREATED,
@@ -147,6 +153,16 @@ const deleteHighlight = async (req, res, next) => {
   }
 };
 
+const listFeed = async (req, res, next) => {
+  try {
+    const { data } = validateListQuery(req.query);
+    const result = await highlightService.listFeedHighlights(req.userId, data);
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const listMyHighlights = async (req, res, next) => {
   try {
     const { data } = validateListQuery(req.query);
@@ -165,4 +181,5 @@ module.exports = {
   updateHighlight,
   deleteHighlight,
   listMyHighlights,
+  listFeed,
 };

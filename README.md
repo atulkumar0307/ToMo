@@ -130,6 +130,33 @@ The React admin panel lives in `../../Admin`.
 | Participants | `GET /activities/:id/participants`, `POST /activities/:id/participants` `{userId\|uid\|mobile, force?}`, `PATCH /activities/:id/participants/:userId` `{status, force?}`, `DELETE /activities/:id/participants/:userId`, `GET /join-requests` |
 | Highlights | `GET /highlights` (`status, activityId, userId, category, tag, mediaType, q, sort`), `GET /highlights/:id`, `PATCH /highlights/:id` `{title?,caption?,description?,tags?,status?}`, `DELETE /highlights/:id[?hard=true]`, `DELETE /highlights/:id/media/:mediaId` |
 
+### Local database
+
+No PostgreSQL installed? `npm run db:local` starts one on the host/port/user/password/database from `DATABASE_URL` (data in `.local-pg/`). Keep it running in its own terminal, then `npm run db:deploy` once to apply migrations.
+
+### Realtime: silent push + chat
+
+Set `FIREBASE_SERVICE_ACCOUNT` (see `.env.example`) to enable pushes. The backend sends **data-only** FCM messages (`type` field below); the app refreshes the matching screen and shows a local notification for chat, join requests, approvals, cancellations and verification results. Without it everything still works (the app refreshes on open / slower polling).
+
+| `type` | Sent to | When |
+| --- | --- | --- |
+| `chat.message` / `chat.message_deleted` | chat members except the sender | message posted / removed |
+| `activity.join_requested` | host | someone asks to join |
+| `activity.participant_updated` | the participant (+ host when they leave) | approved, rejected, left, admin change |
+| `activity.updated` | host, members, pending requesters | started, completed, cancelled, expired, deleted |
+| `highlight.created` | members except the author | new highlight |
+| `verification.reviewed` / `profile.updated` / `account.blocked` | the user | admin actions |
+
+User endpoints: `POST /api/user/devices` `{token, platform}`, `POST /api/user/devices/remove` `{token}` (logout also accepts `deviceToken`), `GET /api/user/chats`, `GET|POST /api/user/activities/:id/chat` (`before`, `after` delta sync, `clientId` idempotency, multipart `image`), `POST /api/user/activities/:id/chat/read`, `DELETE /api/user/activities/:id/chat/:messageId`, `GET /api/user/highlights/feed`, `GET /api/user/profile/stats`.
+
+### Cost & safety
+
+- Lists compute counts with grouped queries (2 queries per page, not 3 per item); `/auth/me` and the auth check reuse a 30 s in-memory user cache; the dashboard is cached 15 s; JSON is gzip-compressed; uploads get random names and a 30-day immutable cache header.
+- Rate limits: OTP resend cooldown + hourly caps, 5 wrong OTPs burn the code, chat 30 messages/min, admin login 10 per 15 min.
+- Verification photos are private: only signed, expiring links (`?exp&sig`) work.
+- Hourly cleanup removes expired sessions, OTPs older than a day and audit logs older than `AUDIT_LOG_RETENTION_DAYS`.
+- Started activities auto-complete `ACTIVITY_AUTO_COMPLETE_GRACE_MINUTES` after their end; pending requests expire when an activity starts; approved members can leave (`/withdraw`).
+
 ### Audit log
 
 Every user action (OTP request, sign-up/login/logout, profile edits, verification submissions, activity create/edit/start/complete/cancel/delete, join/withdraw/approve/reject, highlight post/edit/delete), every admin action, and the expiry job (as `SYSTEM`) write an `AuditLog` row. The row records the actor, the target user, the entity, a readable message, metadata, the IP address and the user agent. A logging failure never fails the request. Deleting a user keeps their log rows; the actor relation is set to null and the readable `actorLabel` is kept.

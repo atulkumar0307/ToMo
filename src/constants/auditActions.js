@@ -25,6 +25,7 @@ const AUDIT_ACTIONS = {
   // User — participants
   JOIN_REQUESTED: 'JOIN_REQUESTED',
   JOIN_WITHDRAWN: 'JOIN_WITHDRAWN',
+  ACTIVITY_LEFT: 'ACTIVITY_LEFT',
   JOIN_APPROVED: 'JOIN_APPROVED',
   JOIN_REJECTED: 'JOIN_REJECTED',
 
@@ -68,6 +69,9 @@ const AUDIT_ACTIONS = {
   ADMIN_HIGHLIGHT_UPDATED: 'ADMIN_HIGHLIGHT_UPDATED',
   ADMIN_HIGHLIGHT_DELETED: 'ADMIN_HIGHLIGHT_DELETED',
   ADMIN_HIGHLIGHT_MEDIA_REMOVED: 'ADMIN_HIGHLIGHT_MEDIA_REMOVED',
+
+  // Admin — chat moderation
+  ADMIN_CHAT_MESSAGE_DELETED: 'ADMIN_CHAT_MESSAGE_DELETED',
 };
 
 const ENTITY_TYPES = {
@@ -96,6 +100,7 @@ const AUDIT_ACTION_CATALOG = [
   { action: AUDIT_ACTIONS.ACTIVITY_EXPIRED, label: 'Activity expired', group: 'Activity' },
   { action: AUDIT_ACTIONS.JOIN_REQUESTED, label: 'Join requested', group: 'Participants' },
   { action: AUDIT_ACTIONS.JOIN_WITHDRAWN, label: 'Join request withdrawn', group: 'Participants' },
+  { action: AUDIT_ACTIONS.ACTIVITY_LEFT, label: 'Left activity', group: 'Participants' },
   { action: AUDIT_ACTIONS.JOIN_APPROVED, label: 'Join request approved', group: 'Participants' },
   { action: AUDIT_ACTIONS.JOIN_REJECTED, label: 'Join request rejected', group: 'Participants' },
   { action: AUDIT_ACTIONS.HIGHLIGHT_CREATED, label: 'Highlight posted', group: 'Highlights' },
@@ -127,6 +132,7 @@ const AUDIT_ACTION_CATALOG = [
   { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_UPDATED, label: 'Highlight edited by admin', group: 'Admin · Highlights' },
   { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_DELETED, label: 'Highlight deleted by admin', group: 'Admin · Highlights' },
   { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_MEDIA_REMOVED, label: 'Highlight media removed', group: 'Admin · Highlights' },
+  { action: AUDIT_ACTIONS.ADMIN_CHAT_MESSAGE_DELETED, label: 'Chat message removed', group: 'Admin · Chat' },
 ];
 
 module.exports = {

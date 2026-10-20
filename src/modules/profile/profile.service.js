@@ -2,6 +2,8 @@ const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
 const { USER_SELECT } = require('../../constants/userSelect');
 const { VERIFIED_FIELD_COOLDOWN_MS } = require('./profile.constants');
+const { invalidateUser } = require('../../utils/userCache');
+const { removeUploadPaths } = require('../../utils/uploads');
 
 const isSameDate = (a, b) => {
   if (!a && !b) {
@@ -72,6 +74,7 @@ const updateProfile = async (userId, data) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
+      profileImagePath: true,
       fullName: true,
       dateOfBirth: true,
       isProfileVerified: true,
@@ -100,11 +103,20 @@ const updateProfile = async (userId, data) => {
     updateData.dateOfBirthUpdatedAt = new Date();
   }
 
-  return prisma.user.update({
+  const updated = await prisma.user.update({
     where: { id: userId },
     data: updateData,
     select: USER_SELECT,
   });
+
+  invalidateUser(userId);
+
+  // A new photo replaces the old file; nothing references the old one any more.
+  if (data.profileImagePath && user.profileImagePath && user.profileImagePath !== data.profileImagePath) {
+    removeUploadPaths([user.profileImagePath]);
+  }
+
+  return updated;
 };
 
 const getProfile = async (userId) => {
@@ -120,7 +132,19 @@ const getProfile = async (userId) => {
   return user;
 };
 
+/** Counts for the profile screen in one request (the app used to page through whole lists). */
+const getProfileStats = async (userId) => {
+  const notDeleted = { status: { not: 'DELETED' } };
+  const [joined, hosted, highlights] = await Promise.all([
+    prisma.activityParticipant.count({ where: { userId, isHost: false, status: 'APPROVED', activity: notDeleted } }),
+    prisma.activity.count({ where: { hostId: userId, ...notDeleted } }),
+    prisma.highlight.count({ where: { userId, status: 'PUBLISHED' } }),
+  ]);
+  return { joined, hosted, highlights };
+};
+
 module.exports = {
+  getProfileStats,
   updateProfile,
   getProfile,
 };

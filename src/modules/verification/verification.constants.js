@@ -20,7 +20,16 @@ const VERIFICATION_SUBMISSION_SELECT = {
   },
 };
 
+const { signUploadPath } = require('../../utils/uploads');
+
+/** Verification photos are private: every path handed out is a short-lived signed URL. */
+const signVerification = (verification) =>
+  verification && verification.images
+    ? { ...verification, images: verification.images.map((image) => ({ ...image, imagePath: signUploadPath(image.imagePath) })) }
+    : verification;
+
 module.exports = {
+  signVerification,
   MIN_IMAGES,
   MAX_IMAGES,
   VERIFICATION_IMAGE_SELECT,

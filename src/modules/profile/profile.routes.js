@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/', profileController.getProfile);
+router.get('/stats', profileController.getStats);
 router.patch(
   '/',
   uploadProfileImage.single('profileImage'),

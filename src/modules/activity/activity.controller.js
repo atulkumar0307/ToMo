@@ -2,6 +2,8 @@ const { AppError } = require('../../utils/errors');
 const { sendSuccess } = require('../../utils/response');
 const { logUserAction, describeActivity, userLabel } = require('../../utils/audit');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
+const realtime = require('../../services/realtime');
+const chatService = require('../chat/chat.service');
 const activityService = require('./activity.service');
 const {
   validateCreateActivity,
@@ -126,6 +128,8 @@ const cancelActivity = async (req, res, next) => {
       `Cancelled activity ${describeActivity(activity)}`,
       { metadata: { approvedCount: activity.approvedCount, pendingCount: activity.pendingCount } }
     );
+    chatService.postSystemMessage(activity.id, 'The host cancelled this activity');
+    realtime.activityUpdated(activity, 'cancelled', { exclude: [req.userId] });
 
     return sendSuccess(res, {
       activity,
@@ -147,6 +151,8 @@ const startActivity = async (req, res, next) => {
       `Started activity ${describeActivity(activity)}`,
       { metadata: { approvedCount: activity.approvedCount } }
     );
+    chatService.postSystemMessage(activity.id, 'The activity has started');
+    realtime.activityUpdated(activity, 'started', { exclude: [req.userId] });
 
     return sendSuccess(res, {
       activity,
@@ -168,6 +174,8 @@ const completeActivity = async (req, res, next) => {
       `Completed activity ${describeActivity(activity)}`,
       { metadata: { approvedCount: activity.approvedCount } }
     );
+    chatService.postSystemMessage(activity.id, 'The activity is complete — share your highlights!');
+    realtime.activityUpdated(activity, 'completed', { exclude: [req.userId] });
 
     return sendSuccess(res, {
       activity,
@@ -190,7 +198,7 @@ const getActivity = async (req, res, next) => {
 
 const joinActivity = async (req, res, next) => {
   try {
-    const result = await activityService.joinActivity(req.userId, req.params.id);
+    const { user: _user, ...result } = await activityService.joinActivity(req.userId, req.params.id);
 
     logActivityAction(
       req,
@@ -198,6 +206,7 @@ const joinActivity = async (req, res, next) => {
       result.activity,
       `Requested to join ${describeActivity(result.activity)}`
     );
+    realtime.joinRequested(result.activity, req.user);
 
     return sendSuccess(
       res,
@@ -212,20 +221,27 @@ const joinActivity = async (req, res, next) => {
   }
 };
 
+/** Withdraws a pending request, or leaves an activity the user was approved for. */
 const withdrawJoinRequest = async (req, res, next) => {
   try {
     const result = await activityService.withdrawJoinRequest(req.userId, req.params.id);
 
     logActivityAction(
       req,
-      AUDIT_ACTIONS.JOIN_WITHDRAWN,
+      result.left ? AUDIT_ACTIONS.ACTIVITY_LEFT : AUDIT_ACTIONS.JOIN_WITHDRAWN,
       result.activity,
-      `Withdrew join request for ${describeActivity(result.activity)}`
+      result.left
+        ? `Left activity ${describeActivity(result.activity)}`
+        : `Withdrew join request for ${describeActivity(result.activity)}`
     );
+    if (result.left) {
+      chatService.postSystemMessage(result.activity.id, `${userLabel(req.user)} left`);
+    }
+    realtime.participantUpdated(result.activity, req.userId, result.participantStatus, { notifyHost: true });
 
     return sendSuccess(res, {
       ...result,
-      message: 'Join request withdrawn successfully',
+      message: result.left ? 'You left the activity' : 'Join request withdrawn successfully',
     });
   } catch (err) {
     next(err);
@@ -266,6 +282,8 @@ const approveParticipant = async (req, res, next) => {
         metadata: { participantUserId: req.params.userId },
       }
     );
+    chatService.postSystemMessage(result.activity.id, `${userLabel(result.participant.user)} joined`);
+    realtime.participantUpdated(result.activity, req.params.userId, 'APPROVED');
 
     return sendSuccess(res, {
       ...result,
@@ -300,6 +318,7 @@ const rejectParticipant = async (req, res, next) => {
         metadata: { participantUserId: req.params.userId },
       }
     );
+    realtime.participantUpdated(result.activity, req.params.userId, 'REJECTED');
 
     return sendSuccess(res, {
       ...result,

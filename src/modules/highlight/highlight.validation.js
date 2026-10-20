@@ -184,6 +184,11 @@ const validateCreateHighlight = (body, files) => {
     return { error: mediaOrderResult.error };
   }
 
+  const clientRequestId = body.clientRequestId ? String(body.clientRequestId).trim() : null;
+  if (clientRequestId && !/^[A-Za-z0-9_-]{1,64}$/.test(clientRequestId)) {
+    return { error: 'clientRequestId must be 1–64 letters, digits, - or _' };
+  }
+
   return {
     data: {
       title: body.title.trim(),
@@ -191,6 +196,7 @@ const validateCreateHighlight = (body, files) => {
       description: body.description?.trim() || null,
       tags: tagsResult.tags,
       mediaOrder: mediaOrderResult.order,
+      clientRequestId,
     },
   };
 };

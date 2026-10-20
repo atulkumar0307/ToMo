@@ -1,6 +1,5 @@
-const prisma = require('../config/database');
-const { USER_SELECT } = require('../constants/userSelect');
 const { AppError } = require('../utils/errors');
+const { getAuthUser } = require('../utils/userCache');
 const { verifyAccessToken } = require('../utils/jwt');
 
 const authenticate = async (req, res, next) => {
@@ -14,10 +13,7 @@ const authenticate = async (req, res, next) => {
     const token = authHeader.split(' ')[1];
     const decoded = verifyAccessToken(token);
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: USER_SELECT,
-    });
+    const user = await getAuthUser(decoded.userId);
 
     if (!user) {
       throw new AppError('User not found or Unauthorized', 401);

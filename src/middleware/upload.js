@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const { AppError } = require('../utils/errors');
+const { randomFilename } = require('../utils/uploads');
 
 const PROFILES_DIR = path.join(__dirname, '../../uploads/profiles');
 const VERIFICATION_IMAGES_DIR = path.join(
@@ -9,6 +10,7 @@ const VERIFICATION_IMAGES_DIR = path.join(
   '../../uploads/verification-images'
 );
 const HIGHLIGHTS_DIR = path.join(__dirname, '../../uploads/highlights');
+const CHAT_IMAGES_DIR = path.join(__dirname, '../../uploads/chat-images');
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_HIGHLIGHT_MEDIA_SIZE = 50 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -21,30 +23,14 @@ const ALLOWED_HIGHLIGHT_MIME_TYPES = [
 fs.mkdirSync(PROFILES_DIR, { recursive: true });
 fs.mkdirSync(VERIFICATION_IMAGES_DIR, { recursive: true });
 fs.mkdirSync(HIGHLIGHTS_DIR, { recursive: true });
-
-const resolveUniqueFilename = (directory, originalName) => {
-  const safeName = path.basename(originalName);
-  const ext = path.extname(safeName);
-  const base = path.basename(safeName, ext);
-
-  let candidate = safeName;
-  let counter = 2;
-
-  while (fs.existsSync(path.join(directory, candidate))) {
-    candidate = `${base}-${counter}${ext}`;
-    counter += 1;
-  }
-
-  return candidate;
-};
+fs.mkdirSync(CHAT_IMAGES_DIR, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, PROFILES_DIR);
   },
   filename: (_req, file, cb) => {
-    const filename = resolveUniqueFilename(PROFILES_DIR, file.originalname);
-    cb(null, filename);
+    cb(null, randomFilename(file));
   },
 });
 
@@ -61,11 +47,7 @@ const verificationImageStorage = multer.diskStorage({
     cb(null, VERIFICATION_IMAGES_DIR);
   },
   filename: (_req, file, cb) => {
-    const filename = resolveUniqueFilename(
-      VERIFICATION_IMAGES_DIR,
-      file.originalname
-    );
-    cb(null, filename);
+    cb(null, randomFilename(file));
   },
 });
 
@@ -86,8 +68,7 @@ const highlightMediaStorage = multer.diskStorage({
     cb(null, HIGHLIGHTS_DIR);
   },
   filename: (_req, file, cb) => {
-    const filename = resolveUniqueFilename(HIGHLIGHTS_DIR, file.originalname);
-    cb(null, filename);
+    cb(null, randomFilename(file));
   },
 });
 
@@ -107,8 +88,19 @@ const uploadHighlightMedia = multer({
   limits: { fileSize: MAX_HIGHLIGHT_MEDIA_SIZE },
 });
 
+const uploadChatImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, CHAT_IMAGES_DIR),
+    filename: (_req, file, cb) => cb(null, randomFilename(file)),
+  }),
+  fileFilter: imageFileFilter,
+  limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+});
+
 module.exports = {
   uploadProfileImage,
+  uploadChatImage,
+  CHAT_IMAGES_DIR,
   uploadVerificationImages,
   uploadHighlightMedia,
   PROFILES_DIR,

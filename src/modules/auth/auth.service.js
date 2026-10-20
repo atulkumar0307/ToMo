@@ -65,8 +65,22 @@ const findValidOtp = async (mobile, action, otp) => {
     orderBy: { createdAt: 'desc' },
   });
 
-  if (!record || record.otp !== normalizedOtp) {
+  if (!record) {
     throw new AppError('Invalid or expired OTP', 400);
+  }
+
+  if (record.otp !== normalizedOtp) {
+    // Each code allows a few guesses; after that it is burned and a new one is needed.
+    const attempts = record.attempts + 1;
+    const exhausted = attempts >= env.otp.maxVerifyAttempts;
+    await prisma.otp.update({
+      where: { id: record.id },
+      data: { attempts, ...(exhausted ? { isUsed: true } : {}) },
+    });
+    throw new AppError(
+      exhausted ? 'Too many wrong attempts. Please request a new code.' : 'Invalid or expired OTP',
+      exhausted ? 429 : 400
+    );
   }
 
   return record;
@@ -195,7 +209,7 @@ const refreshAccessToken = async (refreshToken) => {
   return { accessToken };
 };
 
-const logout = async (refreshToken) => {
+const logout = async (refreshToken, deviceToken) => {
   const storedToken = await prisma.refreshToken.findUnique({
     where: { token: refreshToken },
     select: {
@@ -209,6 +223,11 @@ const logout = async (refreshToken) => {
   }
 
   await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
+
+  // Stop pushes to this phone for this user.
+  if (typeof deviceToken === 'string' && deviceToken) {
+    await prisma.deviceToken.deleteMany({ where: { token: deviceToken, userId: storedToken.user.id } });
+  }
 
   return { loggedOut: true, user: storedToken.user };
 };

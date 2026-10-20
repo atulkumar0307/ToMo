@@ -62,8 +62,8 @@ const verifyOtp = async (req, res, next) => {
 
 const getMe = async (req, res, next) => {
   try {
-    const user = await authService.getCurrentUser(req.userId);
-    return sendSuccess(res, { user });
+    // The auth middleware already loaded (and cached) the user.
+    return sendSuccess(res, { user: req.user });
   } catch (err) {
     next(err);
   }
@@ -90,7 +90,7 @@ const logout = async (req, res, next) => {
       throw new AppError(validationError, 400);
     }
 
-    const { user } = await authService.logout(req.body.refreshToken);
+    const { user } = await authService.logout(req.body.refreshToken, req.body.deviceToken);
 
     logUserAction(req, AUDIT_ACTIONS.AUTH_LOGOUT, {
       user,

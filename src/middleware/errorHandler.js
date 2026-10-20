@@ -30,6 +30,33 @@ const errorHandler = (err, req, res, next) => {
     return sendError(res, err.message, 400);
   }
 
+  // Malformed JSON body.
+  if (err.type === 'entity.parse.failed') {
+    return sendError(res, 'Request body is not valid JSON', 400);
+  }
+
+  if (err.type === 'entity.too.large') {
+    return sendError(res, 'Request body is too large', 413);
+  }
+
+  // Known Prisma request errors: answer with a clear status instead of a 500.
+  if (err.code === 'P2002') {
+    return sendError(res, 'This already exists', 409);
+  }
+
+  if (err.code === 'P2025') {
+    return sendError(res, 'Record not found', 404);
+  }
+
+  if (err.code === 'P2003') {
+    return sendError(res, 'A related record does not exist', 400);
+  }
+
+  // Ids are UUIDs; a malformed one can't match anything.
+  if (err.code === 'P2023') {
+    return sendError(res, 'Invalid id', 400);
+  }
+
   console.error(err);
 
   const statusCode = err.statusCode || 500;

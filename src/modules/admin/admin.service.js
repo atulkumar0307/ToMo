@@ -3,7 +3,7 @@ const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
 const { getNextUserUid } = require('../../utils/userUid');
 const { removeUploadPaths } = require('../../utils/uploads');
-const { VERIFICATION_SUBMISSION_SELECT } = require('../verification/verification.constants');
+const { VERIFICATION_SUBMISSION_SELECT, signVerification } = require('../verification/verification.constants');
 const {
   ADMIN_USER_SELECT,
   ADMIN_VERIFICATION_SELECT,
@@ -19,13 +19,14 @@ const {
   ALLOWED_GENDERS,
 } = require('./admin.validation');
 const { attachActivityStats } = require('./admin.activity.service');
+const { invalidateUser } = require('../../utils/userCache');
 
 const formatAdminUser = (user) => {
   const { verificationSubmissions, _count, ...rest } = user;
 
   return {
     ...rest,
-    latestVerification: verificationSubmissions?.[0] || null,
+    latestVerification: signVerification(verificationSubmissions?.[0]) || null,
     counts: {
       hostedActivities: _count?.hostedActivities ?? 0,
       highlights: _count?.highlights ?? 0,
@@ -230,6 +231,7 @@ const setUserBlockStatus = async (userId, isBlocked) => {
     });
   });
 
+  invalidateUser(userId);
   return formatAdminUser(user);
 };
 
@@ -257,6 +259,7 @@ const updateUserProfile = async (userId, data) => {
     removeUploadPaths([before.profileImagePath]);
   }
 
+  invalidateUser(userId);
   return formatAdminUser(user);
 };
 
@@ -274,6 +277,7 @@ const removeUserProfileImage = async (userId) => {
   });
 
   removeUploadPaths([before.profileImagePath]);
+  invalidateUser(userId);
   return formatAdminUser(user);
 };
 
@@ -307,6 +311,7 @@ const deleteUser = async (userId) => {
   ]);
 
   await prisma.user.delete({ where: { id: userId } });
+  invalidateUser(userId);
 
   removeUploadPaths([
     user.profileImagePath,
@@ -426,7 +431,7 @@ const listUserVerifications = async (userId) => {
     select: VERIFICATION_SUBMISSION_SELECT,
   });
 
-  return { verifications };
+  return { verifications: verifications.map(signVerification) };
 };
 
 // ---------------------------------------------------------------------------
@@ -465,7 +470,7 @@ const listVerifications = async (query = {}) => {
   ]);
 
   return {
-    verifications,
+    verifications: verifications.map(signVerification),
     counts: Object.fromEntries(counts.map((row) => [row.status, row._count._all])),
     pagination: buildPagination(page, limit, total),
   };
@@ -487,7 +492,7 @@ const getVerification = async (verificationId) => {
     select: VERIFICATION_SUBMISSION_SELECT,
   });
 
-  return { verification, history };
+  return { verification: signVerification(verification), history: history.map(signVerification) };
 };
 
 const findPendingVerificationOrThrow = async (verificationId) => {
@@ -533,7 +538,9 @@ const reviewVerificationSubmission = async (verificationId, status, remark) => {
       return updatedVerification;
     });
 
-    return { verification: updated, user: verification.user };
+    invalidateUser(verification.userId);
+
+    return { verification: signVerification(updated), user: verification.user };
   }
 
   const updated = await prisma.verificationSubmission.update({
@@ -545,7 +552,7 @@ const reviewVerificationSubmission = async (verificationId, status, remark) => {
     select: VERIFICATION_SUBMISSION_SELECT,
   });
 
-  return { verification: updated, user: verification.user };
+  return { verification: signVerification(updated), user: verification.user };
 };
 
 module.exports = {

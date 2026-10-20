@@ -46,14 +46,23 @@ const updateProfile = async (req, res, next) => {
 
 const getProfile = async (req, res, next) => {
   try {
-    const user = await profileService.getProfile(req.userId);
-    return sendSuccess(res, { user });
+    return sendSuccess(res, { user: req.user });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getStats = async (req, res, next) => {
+  try {
+    const stats = await profileService.getProfileStats(req.userId);
+    return sendSuccess(res, { stats });
   } catch (err) {
     next(err);
   }
 };
 
 module.exports = {
+  getStats,
   updateProfile,
   getProfile,
 };

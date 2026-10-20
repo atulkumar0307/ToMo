@@ -9,3 +9,7 @@ uploads/verification-images/*
 !uploads/verification-images/.gitkeep
 uploads/highlights/*
 !uploads/highlights/.gitkeep
+
+.local-pg/
+uploads/chat-images/*
+firebase-service-account*.json

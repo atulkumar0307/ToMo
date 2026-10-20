@@ -4,6 +4,9 @@ const { logAdminAction, describeActivity, userLabel } = require('../../utils/aud
 const { formatActivityCode } = require('../../utils/activityAid');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const activityService = require('./admin.activity.service');
+const realtime = require('../../services/realtime');
+const { notifyUsers } = require('../../services/push');
+const chatService = require('../chat/chat.service');
 const {
   validateIdParam,
   validateAdminActivityUpdate,
@@ -139,6 +142,16 @@ const changeStatus = async (req, res, next) => {
 
     const result = await activityService.changeActivityStatus(req.params.activityId, validation.data);
     const { reason } = validation.data;
+    const STATUS_NOTES = {
+      ACTIVE: 'The activity has started',
+      COMPLETED: 'The activity is complete — share your highlights!',
+      CANCELLED: 'This activity was cancelled',
+      PUBLISHED: 'This activity is open again',
+    };
+    if (STATUS_NOTES[result.activity.status]) {
+      chatService.postSystemMessage(result.activity.id, STATUS_NOTES[result.activity.status]);
+    }
+    realtime.activityUpdated(result.activity, `status:${result.activity.status}`);
 
     logActivityChange(
       req,
@@ -158,7 +171,21 @@ const deleteActivity = async (req, res, next) => {
   try {
     assertParams(req, 'activityId');
     const hard = parseBooleanQuery(req.query.hard) === true;
+
+    // A hard delete removes the participant rows, so collect recipients first.
+    const memberIds = hard ? await realtime.activityMemberIds(req.params.activityId, { includePending: true }) : null;
     const result = await activityService.deleteActivity(req.params.activityId, { hard });
+
+    if (hard) {
+      notifyUsers(memberIds, {
+        type: realtime.EVENTS.ACTIVITY_UPDATED,
+        activityId: result.activity.id,
+        status: 'DELETED',
+        reason: 'deleted',
+      });
+    } else {
+      realtime.activityUpdated(result.activity, 'deleted');
+    }
 
     logAdminAction(req, AUDIT_ACTIONS.ADMIN_ACTIVITY_DELETED, {
       entityType: ENTITY_TYPES.ACTIVITY,
@@ -201,6 +228,9 @@ const addParticipant = async (req, res, next) => {
     }
 
     const result = await activityService.addParticipant(req.params.activityId, validation.data);
+    chatService.postSystemMessage(result.activity.id, `${userLabel(result.participant.user)} joined`);
+    realtime.participantUpdated(result.activity, result.participant.userId, 'APPROVED', { notifyHost: true });
+    realtime.activityUpdated(result.activity, 'members');
 
     logAdminAction(req, AUDIT_ACTIONS.ADMIN_PARTICIPANT_ADDED, {
       entityType: ENTITY_TYPES.ACTIVITY,
@@ -234,6 +264,12 @@ const changeParticipantStatus = async (req, res, next) => {
       req.params.userId,
       validation.data
     );
+    if (result.participant.status === 'APPROVED') {
+      chatService.postSystemMessage(result.activity.id, `${userLabel(result.participant.user)} joined`);
+    } else if (result.previousStatus === 'APPROVED') {
+      chatService.postSystemMessage(result.activity.id, `${userLabel(result.participant.user)} left`);
+    }
+    realtime.participantUpdated(result.activity, req.params.userId, result.participant.status, { notifyHost: true });
 
     logAdminAction(req, AUDIT_ACTIONS.ADMIN_PARTICIPANT_STATUS_CHANGED, {
       entityType: ENTITY_TYPES.ACTIVITY,
@@ -262,6 +298,10 @@ const removeParticipant = async (req, res, next) => {
   try {
     assertParams(req, 'activityId', 'userId');
     const result = await activityService.removeParticipant(req.params.activityId, req.params.userId);
+    if (result.participant.status === 'APPROVED') {
+      chatService.postSystemMessage(result.activity.id, `${userLabel(result.participant.user)} was removed`);
+    }
+    realtime.participantUpdated(result.activity, req.params.userId, 'REMOVED', { notifyHost: true });
 
     logAdminAction(req, AUDIT_ACTIONS.ADMIN_PARTICIPANT_REMOVED, {
       entityType: ENTITY_TYPES.ACTIVITY,
@@ -276,6 +316,35 @@ const removeParticipant = async (req, res, next) => {
     });
 
     return sendSuccess(res, { participant: result.participant, message: 'Participant removed' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const listChat = async (req, res, next) => {
+  try {
+    assertParams(req, 'activityId');
+    const result = await chatService.adminListMessages(req.params.activityId, req.query);
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteChatMessage = async (req, res, next) => {
+  try {
+    assertParams(req, 'activityId', 'messageId');
+    const { message, original } = await chatService.adminDeleteMessage(req.params.activityId, req.params.messageId);
+
+    logAdminAction(req, AUDIT_ACTIONS.ADMIN_CHAT_MESSAGE_DELETED, {
+      entityType: ENTITY_TYPES.ACTIVITY,
+      entityId: req.params.activityId,
+      targetUserId: original.userId,
+      message: `Removed a chat message${original.text ? `: “${original.text.slice(0, 80)}”` : ' (photo)'}`,
+      metadata: { messageId: original.id, activityId: req.params.activityId, text: original.text?.slice(0, 500) },
+    });
+
+    return sendSuccess(res, { message, deleted: true });
   } catch (err) {
     next(err);
   }
@@ -303,4 +372,6 @@ module.exports = {
   changeParticipantStatus,
   removeParticipant,
   listJoinRequests,
+  listChat,
+  deleteChatMessage,
 };

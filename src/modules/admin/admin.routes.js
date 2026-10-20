@@ -5,17 +5,35 @@ const adminController = require('./admin.controller');
 const usersController = require('./admin.users.controller');
 const activityController = require('./admin.activity.controller');
 const highlightController = require('./admin.highlight.controller');
+const { invalidateDashboard } = require('./admin.dashboard.service');
+const { rateLimit, clientIp } = require('../../middleware/rateLimit');
+
+const loginLimits = rateLimit([
+  {
+    name: 'admin-login',
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    key: (req) => `${clientIp(req)}:${String(req.body?.email || '').toLowerCase()}`,
+    message: 'Too many sign-in attempts. Try again in 15 minutes.',
+  },
+]);
 
 const router = Router();
 
 // Public: session endpoints. Register only works while no admin exists.
 router.get('/setup-status', adminController.setupStatus);
-router.post('/register', adminController.register);
-router.post('/login', adminController.login);
+router.post('/register', loginLimits, adminController.register);
+router.post('/login', loginLimits, adminController.login);
 router.post('/refresh-token', adminController.refreshToken);
 router.post('/logout', adminController.logout);
 
 router.use(authenticateAdmin);
+
+// Any admin write can change the dashboard numbers; drop the 15s cache so badges update at once.
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', invalidateDashboard);
+  next();
+});
 
 // Own account
 router.get('/me', adminController.getMe);
@@ -72,6 +90,8 @@ router.patch(
 );
 router.delete('/activities/:activityId/participants/:userId', activityController.removeParticipant);
 router.get('/join-requests', activityController.listJoinRequests);
+router.get('/activities/:activityId/chat', activityController.listChat);
+router.delete('/activities/:activityId/chat/:messageId', activityController.deleteChatMessage);
 
 // Highlights
 router.get('/highlights', highlightController.listHighlights);

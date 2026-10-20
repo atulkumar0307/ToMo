@@ -4,9 +4,11 @@ const { ActivityStatus, HighlightStatus, MediaType, ParticipantStatus } = requir
 const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
 const { getVideoDurationSeconds } = require('../../utils/videoDuration');
+const { formatActivityCode } = require('../../utils/activityAid');
 const {
   PAST_ACTIVITY_STATUSES,
   HIGHLIGHT_SELECT,
+  HIGHLIGHT_FEED_SELECT,
   LIST_HIGHLIGHT_STATUSES,
   ALLOWED_IMAGE_MIME_TYPES,
   ALLOWED_VIDEO_MIME_TYPES,
@@ -48,7 +50,11 @@ const formatHighlight = (highlight) => ({
     uid: highlight.user.uid,
     fullName: highlight.user.fullName,
     profileImagePath: highlight.user.profileImagePath,
+    isProfileVerified: highlight.user.isProfileVerified,
   },
+  ...(highlight.activity
+    ? { activity: { ...highlight.activity, activityCode: formatActivityCode(highlight.activity.aid) } }
+    : {}),
 });
 
 const fetchActivityOrThrow = async (activityId) => {
@@ -256,6 +262,18 @@ const fetchPublishedHighlightOrThrow = async (highlightId) => {
 const createHighlight = async (userId, activityId, data, files) => {
   let mediaRecords;
 
+  // A retried upload (timeout, lost connection) returns the highlight the first attempt created.
+  if (data.clientRequestId) {
+    const existing = await prisma.highlight.findUnique({
+      where: { userId_clientRequestId: { userId, clientRequestId: data.clientRequestId } },
+      select: HIGHLIGHT_SELECT,
+    });
+    if (existing) {
+      removeUploadedFiles(files);
+      return { ...formatHighlight(existing), duplicate: true };
+    }
+  }
+
   try {
     const activity = await fetchActivityOrThrow(activityId);
     await assertCanPostHighlight(activity, userId);
@@ -275,6 +293,7 @@ const createHighlight = async (userId, activityId, data, files) => {
         caption: data.caption,
         description: data.description,
         tags: data.tags,
+        clientRequestId: data.clientRequestId || null,
         status: HighlightStatus.PUBLISHED,
         mediaItems: {
           create: mediaRecords,
@@ -402,6 +421,31 @@ const listMyHighlights = async (userId, { page, limit }) => {
   };
 };
 
+/**
+ * One request for the app's highlights feed: published highlights from every
+ * activity the user hosted or was approved for, newest first.
+ */
+const listFeedHighlights = async (userId, { page, limit }) => {
+  const where = {
+    status: HighlightStatus.PUBLISHED,
+    activity: {
+      status: { not: ActivityStatus.DELETED },
+      OR: [{ hostId: userId }, { participants: { some: { userId, status: ParticipantStatus.APPROVED } } }],
+    },
+  };
+
+  const skip = (page - 1) * limit;
+  const [highlights, total] = await Promise.all([
+    prisma.highlight.findMany({ where, select: HIGHLIGHT_FEED_SELECT, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+    prisma.highlight.count({ where }),
+  ]);
+
+  return {
+    highlights: highlights.map(formatHighlight),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
+  };
+};
+
 const countPublishedHighlights = async (activityId) => {
   return prisma.highlight.count({
     where: {
@@ -418,6 +462,7 @@ module.exports = {
   updateHighlight,
   deleteHighlight,
   listMyHighlights,
+  listFeedHighlights,
   countPublishedHighlights,
   removeUploadedFiles,
 };

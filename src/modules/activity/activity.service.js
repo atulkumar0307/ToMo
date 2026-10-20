@@ -1,5 +1,6 @@
-const { ActivityStatus, ParticipantStatus, HighlightStatus } = require('@prisma/client');
+const { ActivityStatus, ParticipantStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
+const env = require('../../config/env');
 const { AppError } = require('../../utils/errors');
 const {
   ACTIVITY_SELECT,
@@ -13,6 +14,9 @@ const {
 const { getNextActivityAid, formatActivityCode } = require('../../utils/activityAid');
 const { logSystemActions, describeActivity } = require('../../utils/audit');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
+const { loadParticipantCounts, loadHighlightCounts, countsFor } = require('./activity.stats');
+
+const MINUTE_MS = 60 * 1000;
 
 const assertVerifiedProfile = (user) => {
   if (user.isBlocked) {
@@ -48,39 +52,14 @@ const REJOINABLE_STATUSES = [
   ParticipantStatus.EXPIRED,
 ];
 
-const getMyParticipation = async (activityId, userId) => {
-  const membership = await getParticipantMembership(activityId, userId);
+/** Statuses a member can leave from. Leaving after the end makes no difference. */
+const LEAVABLE_ACTIVITY_STATUSES = [ActivityStatus.PUBLISHED, ActivityStatus.ACTIVE];
 
-  if (!membership) {
-    return null;
-  }
-
-  return {
-    status: membership.status,
-    isHost: membership.isHost,
-  };
-};
-
-const getNonHostParticipantCounts = async (activityId, tx = prisma) => {
-  const [pending, approved] = await Promise.all([
-    tx.activityParticipant.count({
-      where: {
-        activityId,
-        isHost: false,
-        status: ParticipantStatus.PENDING,
-      },
-    }),
-    tx.activityParticipant.count({
-      where: {
-        activityId,
-        isHost: false,
-        status: ParticipantStatus.APPROVED,
-      },
-    }),
-  ]);
-
-  return { pending, approved };
-};
+/**
+ * Serialises joins/approvals on one activity: concurrent requests wait here,
+ * so two people can never both take the last spot.
+ */
+const lockActivity = (tx, activityId) => tx.$queryRaw`SELECT id FROM "Activity" WHERE id = ${activityId} FOR UPDATE`;
 
 const getApprovedCount = async (activityId, tx = prisma) => {
   return tx.activityParticipant.count({
@@ -91,24 +70,29 @@ const getApprovedCount = async (activityId, tx = prisma) => {
   });
 };
 
-const formatActivityResponse = async (activity, tx = prisma) => {
-  const [approvedCount, counts] = await Promise.all([
-    getApprovedCount(activity.id, tx),
-    getNonHostParticipantCounts(activity.id, tx),
-  ]);
-
+const shapeActivity = (activity, participantCounts, highlightCounts) => {
+  const counts = countsFor(participantCounts, activity.id);
   return {
     ...activity,
     activityCode: formatActivityCode(activity.aid),
-    approvedCount,
+    approvedCount: counts.approved,
     pendingCount: counts.pending,
-    spotsLeft: Math.max(activity.maxParticipants - approvedCount, 0),
+    spotsLeft: Math.max(activity.maxParticipants - counts.approved, 0),
+    highlightCount: highlightCounts.get(activity.id) || 0,
   };
 };
 
-const formatActivityList = async (activities) => {
-  return Promise.all(activities.map((activity) => formatActivityResponse(activity)));
+/** Adds counts to many activities with two grouped queries in total (not per activity). */
+const formatActivityList = async (activities, tx = prisma) => {
+  const ids = activities.map((activity) => activity.id);
+  const [participantCounts, highlightCounts] = await Promise.all([
+    loadParticipantCounts(ids, tx),
+    loadHighlightCounts(ids, tx),
+  ]);
+  return activities.map((activity) => shapeActivity(activity, participantCounts, highlightCounts));
 };
+
+const formatActivityResponse = async (activity, tx = prisma) => (await formatActivityList([activity], tx))[0];
 
 const fetchActivityForHost = async (activityId, hostId) => {
   const activity = await prisma.activity.findFirst({
@@ -123,8 +107,8 @@ const fetchActivityForHost = async (activityId, hostId) => {
   return activity;
 };
 
-const fetchActivityById = async (activityId) => {
-  const activity = await prisma.activity.findUnique({
+const fetchActivityById = async (activityId, tx = prisma) => {
+  const activity = await tx.activity.findUnique({
     where: { id: activityId },
     select: ACTIVITY_SELECT,
   });
@@ -151,6 +135,15 @@ const getParticipantMembership = async (activityId, userId) => {
   });
 };
 
+const getNonHostParticipantCounts = async (activityId) => {
+  const counts = countsFor(await loadParticipantCounts([activityId]), activityId);
+  // `approved` from the loader includes the host; callers here want joiners only.
+  const hostApproved = await prisma.activityParticipant.count({
+    where: { activityId, isHost: true, status: ParticipantStatus.APPROVED },
+  });
+  return { pending: counts.pending, approved: counts.approved - hostApproved };
+};
+
 const assertNoHostTimeOverlap = async (hostId, startTime, endTime, excludeActivityId = null) => {
   const overlapping = await prisma.activity.findFirst({
     where: {
@@ -172,9 +165,10 @@ const assertNoJoinerTimeOverlap = async (
   userId,
   startTime,
   endTime,
-  excludeActivityId = null
+  excludeActivityId = null,
+  tx = prisma
 ) => {
-  const overlapping = await prisma.activityParticipant.findFirst({
+  const overlapping = await tx.activityParticipant.findFirst({
     where: {
       userId,
       isHost: false,
@@ -249,6 +243,13 @@ const assertJoinableActivity = (activity) => {
     throw new AppError('This activity has ended', 400);
   }
 };
+
+/** Expires pending requests that can no longer be answered (activity started or closed). */
+const expirePendingRequests = (activityId, tx = prisma) =>
+  tx.activityParticipant.updateMany({
+    where: { activityId, isHost: false, status: ParticipantStatus.PENDING },
+    data: { status: ParticipantStatus.EXPIRED },
+  });
 
 const createActivity = async (hostId, data) => {
   const host = await prisma.user.findUnique({
@@ -374,6 +375,10 @@ const cancelActivity = async (hostId, activityId) => {
   return formatActivityResponse(cancelled);
 };
 
+/** Earliest moment the host may press Start. */
+const earliestStartOf = (activity) =>
+  new Date(activity.startTime.getTime() - env.activity.startEarlyMinutes * MINUTE_MS);
+
 const startActivity = async (hostId, activityId) => {
   const activity = await fetchActivityForHost(activityId, hostId);
 
@@ -387,14 +392,26 @@ const startActivity = async (hostId, activityId) => {
     throw new AppError('Cannot start an activity after its end time', 400);
   }
 
-  const started = await prisma.activity.update({
-    where: { id: activityId },
-    data: {
-      status: ActivityStatus.ACTIVE,
-      startedAt: now,
-    },
-    select: ACTIVITY_SELECT,
-  });
+  if (now < earliestStartOf(activity)) {
+    const minutes = Math.ceil((earliestStartOf(activity) - now) / MINUTE_MS);
+    throw new AppError(
+      `Too early to start: you can start up to ${env.activity.startEarlyMinutes} minutes before the start time (in ${minutes} min).`,
+      400
+    );
+  }
+
+  // Requests nobody answered can't be approved once it's running.
+  const [, started] = await prisma.$transaction([
+    expirePendingRequests(activityId),
+    prisma.activity.update({
+      where: { id: activityId },
+      data: {
+        status: ActivityStatus.ACTIVE,
+        startedAt: now,
+      },
+      select: ACTIVITY_SELECT,
+    }),
+  ]);
 
   return formatActivityResponse(started);
 };
@@ -406,14 +423,17 @@ const completeActivity = async (hostId, activityId) => {
     throw new AppError('Only active activities can be completed', 400);
   }
 
-  const completed = await prisma.activity.update({
-    where: { id: activityId },
-    data: {
-      status: ActivityStatus.COMPLETED,
-      completedAt: new Date(),
-    },
-    select: ACTIVITY_SELECT,
-  });
+  const [, completed] = await prisma.$transaction([
+    expirePendingRequests(activityId),
+    prisma.activity.update({
+      where: { id: activityId },
+      data: {
+        status: ActivityStatus.COMPLETED,
+        completedAt: new Date(),
+      },
+      select: ACTIVITY_SELECT,
+    }),
+  ]);
 
   return formatActivityResponse(completed);
 };
@@ -422,97 +442,93 @@ const getActivityById = async (userId, activityId) => {
   const activity = await fetchActivityById(activityId);
   await assertCanViewActivity(activity, userId);
 
-  const [formatted, myParticipation, highlightCount] = await Promise.all([
+  const [formatted, myParticipation] = await Promise.all([
     formatActivityResponse(activity),
-    getMyParticipation(activityId, userId),
-    prisma.highlight.count({
-      where: {
-        activityId,
-        status: HighlightStatus.PUBLISHED,
-      },
-    }),
+    getParticipantMembership(activityId, userId),
   ]);
 
   return {
     activity: formatted,
-    myParticipation,
-    highlightCount,
+    myParticipation: myParticipation ? { status: myParticipation.status, isHost: myParticipation.isHost } : null,
+    highlightCount: formatted.highlightCount,
+    canStartAt: activity.status === ActivityStatus.PUBLISHED ? earliestStartOf(activity) : null,
   };
 };
 
 const joinActivity = async (userId, activityId) => {
-  await fetchVerifiedUser(userId);
+  const user = await fetchVerifiedUser(userId);
 
-  const activity = await fetchActivityById(activityId);
-  assertJoinableActivity(activity);
+  const activity = await prisma.$transaction(async (tx) => {
+    await lockActivity(tx, activityId);
+    const fresh = await fetchActivityById(activityId, tx);
+    assertJoinableActivity(fresh);
 
-  if (activity.hostId === userId) {
-    throw new AppError('You cannot join your own activity', 400);
-  }
-
-  await assertNoJoinerTimeOverlap(userId, activity.startTime, activity.endTime, activityId);
-
-  const approvedCount = await getApprovedCount(activityId);
-
-  if (approvedCount >= activity.maxParticipants) {
-    throw new AppError('This activity is full', 409);
-  }
-
-  const existing = await prisma.activityParticipant.findUnique({
-    where: {
-      activityId_userId: {
-        activityId,
-        userId,
-      },
-    },
-  });
-
-  if (existing) {
-    if (existing.isHost) {
+    if (fresh.hostId === userId) {
       throw new AppError('You cannot join your own activity', 400);
     }
 
-    if (existing.status === ParticipantStatus.APPROVED) {
-      throw new AppError('You have already joined this activity', 409);
+    await assertNoJoinerTimeOverlap(userId, fresh.startTime, fresh.endTime, activityId, tx);
+
+    const approvedCount = await getApprovedCount(activityId, tx);
+
+    if (approvedCount >= fresh.maxParticipants) {
+      throw new AppError('This activity is full', 409);
     }
 
-    if (existing.status === ParticipantStatus.PENDING) {
-      throw new AppError('You already have a pending join request', 409);
-    }
-
-    if (!REJOINABLE_STATUSES.includes(existing.status)) {
-      throw new AppError('You cannot join this activity', 400);
-    }
-
-    await prisma.activityParticipant.update({
-      where: { id: existing.id },
-      data: { status: ParticipantStatus.PENDING },
+    const existing = await tx.activityParticipant.findUnique({
+      where: { activityId_userId: { activityId, userId } },
     });
-  } else {
-    await prisma.activityParticipant.create({
-      data: {
-        activityId,
-        userId,
-        status: ParticipantStatus.PENDING,
-        isHost: false,
-      },
-    });
-  }
+
+    if (existing) {
+      if (existing.isHost) {
+        throw new AppError('You cannot join your own activity', 400);
+      }
+
+      if (existing.status === ParticipantStatus.APPROVED) {
+        throw new AppError('You have already joined this activity', 409);
+      }
+
+      if (existing.status === ParticipantStatus.PENDING) {
+        throw new AppError('You already have a pending join request', 409);
+      }
+
+      if (!REJOINABLE_STATUSES.includes(existing.status)) {
+        throw new AppError('You cannot join this activity', 400);
+      }
+
+      await tx.activityParticipant.update({
+        where: { id: existing.id },
+        data: { status: ParticipantStatus.PENDING },
+      });
+    } else {
+      await tx.activityParticipant.create({
+        data: {
+          activityId,
+          userId,
+          status: ParticipantStatus.PENDING,
+          isHost: false,
+        },
+      });
+    }
+
+    return fresh;
+  });
 
   const formatted = await formatActivityResponse(activity);
 
   return {
     activity: formatted,
     participantStatus: ParticipantStatus.PENDING,
+    user,
   };
 };
 
+/**
+ * Withdraws a pending request, or leaves an activity the user was approved for
+ * (while it's open or running). Either way the participant becomes WITHDRAWN.
+ */
 const withdrawJoinRequest = async (userId, activityId) => {
   const activity = await fetchActivityById(activityId);
-
-  if (activity.status !== ActivityStatus.PUBLISHED) {
-    throw new AppError('Only published activities allow withdrawing a join request', 400);
-  }
 
   const participant = await prisma.activityParticipant.findUnique({
     where: {
@@ -527,7 +543,17 @@ const withdrawJoinRequest = async (userId, activityId) => {
     throw new AppError('No join request found for this activity', 404);
   }
 
-  if (participant.status !== ParticipantStatus.PENDING) {
+  const leaving = participant.status === ParticipantStatus.APPROVED;
+
+  if (participant.status === ParticipantStatus.PENDING) {
+    if (activity.status !== ActivityStatus.PUBLISHED) {
+      throw new AppError('Only published activities allow withdrawing a join request', 400);
+    }
+  } else if (leaving) {
+    if (!LEAVABLE_ACTIVITY_STATUSES.includes(activity.status)) {
+      throw new AppError('You can only leave an activity before it ends', 400);
+    }
+  } else {
     throw new AppError('Only pending join requests can be withdrawn', 400);
   }
 
@@ -541,6 +567,7 @@ const withdrawJoinRequest = async (userId, activityId) => {
   return {
     activity: formatted,
     participantStatus: ParticipantStatus.WITHDRAWN,
+    left: leaving,
   };
 };
 
@@ -565,8 +592,8 @@ const listActivityParticipants = async (hostId, activityId) => {
   };
 };
 
-const fetchPendingParticipant = async (activityId, participantUserId) => {
-  const participant = await prisma.activityParticipant.findUnique({
+const fetchPendingParticipant = async (activityId, participantUserId, tx = prisma) => {
+  const participant = await tx.activityParticipant.findUnique({
     where: {
       activityId_userId: {
         activityId,
@@ -588,36 +615,33 @@ const fetchPendingParticipant = async (activityId, participantUserId) => {
 };
 
 const approveParticipant = async (hostId, activityId, participantUserId) => {
-  const activity = await fetchActivityForHost(activityId, hostId);
+  await fetchActivityForHost(activityId, hostId);
 
-  if (activity.status !== ActivityStatus.PUBLISHED) {
-    throw new AppError('Only published activities can approve join requests', 400);
-  }
+  const { activity, participant } = await prisma.$transaction(async (tx) => {
+    await lockActivity(tx, activityId);
+    const fresh = await fetchActivityById(activityId, tx);
 
-  await fetchPendingParticipant(activityId, participantUserId);
+    if (fresh.status !== ActivityStatus.PUBLISHED) {
+      throw new AppError('Only published activities can approve join requests', 400);
+    }
 
-  const approvedCount = await getApprovedCount(activityId);
+    await fetchPendingParticipant(activityId, participantUserId, tx);
 
-  if (approvedCount >= activity.maxParticipants) {
-    throw new AppError('Activity is full. Cannot approve more participants', 409);
-  }
+    const approvedCount = await getApprovedCount(activityId, tx);
 
-  await assertNoJoinerTimeOverlap(
-    participantUserId,
-    activity.startTime,
-    activity.endTime,
-    activityId
-  );
+    if (approvedCount >= fresh.maxParticipants) {
+      throw new AppError('Activity is full. Cannot approve more participants', 409);
+    }
 
-  const participant = await prisma.activityParticipant.update({
-    where: {
-      activityId_userId: {
-        activityId,
-        userId: participantUserId,
-      },
-    },
-    data: { status: ParticipantStatus.APPROVED },
-    select: PARTICIPANT_SELECT,
+    await assertNoJoinerTimeOverlap(participantUserId, fresh.startTime, fresh.endTime, activityId, tx);
+
+    const updated = await tx.activityParticipant.update({
+      where: { activityId_userId: { activityId, userId: participantUserId } },
+      data: { status: ParticipantStatus.APPROVED },
+      select: PARTICIPANT_SELECT,
+    });
+
+    return { activity: fresh, participant: updated };
   });
 
   const formatted = await formatActivityResponse(activity);
@@ -656,6 +680,16 @@ const rejectParticipant = async (hostId, activityId, participantUserId) => {
   };
 };
 
+const EARTH_RADIUS_KM = 6371;
+const toRad = (deg) => (deg * Math.PI) / 180;
+
+const distanceKm = (lat1, lng1, lat2, lng2) => {
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(a));
+};
+
 const buildDiscoveryWhere = (filters) => {
   const now = new Date();
   const minStart = new Date(now.getTime() + MIN_LEAD_TIME_MS);
@@ -667,6 +701,8 @@ const buildDiscoveryWhere = (filters) => {
       gte: minStart,
       lte: maxStart,
     },
+    // Blocked hosts' activities stay hidden from discovery.
+    host: { isBlocked: false },
   };
 
   if (filters.category) {
@@ -687,7 +723,7 @@ const buildDiscoveryWhere = (filters) => {
 
   if (filters.latitude !== undefined) {
     const latDelta = filters.radiusKm / 111;
-    const lngDelta = filters.radiusKm / (111 * Math.cos((filters.latitude * Math.PI) / 180));
+    const lngDelta = filters.radiusKm / (111 * Math.max(Math.cos((filters.latitude * Math.PI) / 180), 0.01));
 
     where.latitude = {
       gte: filters.latitude - latDelta,
@@ -718,9 +754,16 @@ const listDiscoveryActivities = async (_userId, { page, limit, filters }) => {
   ]);
 
   const formatted = await formatActivityList(activities);
+  const withDistance =
+    filters.latitude === undefined
+      ? formatted
+      : formatted.map((activity) => ({
+          ...activity,
+          distanceKm: Math.round(distanceKm(filters.latitude, filters.longitude, activity.latitude, activity.longitude) * 100) / 100,
+        }));
 
   return {
-    activities: formatted,
+    activities: withDistance,
     pagination: {
       page,
       limit,
@@ -802,12 +845,11 @@ const listJoinedActivities = async (userId, { page, limit }) => {
     prisma.activityParticipant.count({ where }),
   ]);
 
-  const activities = await Promise.all(
-    participations.map(async ({ status: participantStatus, activity }) => ({
-      ...(await formatActivityResponse(activity)),
-      participantStatus,
-    }))
-  );
+  const formatted = await formatActivityList(participations.map((p) => p.activity));
+  const activities = formatted.map((activity, index) => ({
+    ...activity,
+    participantStatus: participations[index].status,
+  }));
 
   return {
     activities,
@@ -820,6 +862,23 @@ const listJoinedActivities = async (userId, { page, limit }) => {
   };
 };
 
+const activityLogEntry = (activity, action, message) => ({
+  action,
+  entityType: ENTITY_TYPES.ACTIVITY,
+  entityId: activity.id,
+  targetUserId: activity.hostId,
+  message,
+  metadata: {
+    activityId: activity.id,
+    activityCode: formatActivityCode(activity.aid),
+    title: activity.title,
+    category: activity.category,
+  },
+});
+
+const SWEEP_SELECT = { id: true, aid: true, title: true, hostId: true, category: true, status: true };
+
+/** Published activities nobody started become EXPIRED after their end time. Returns the affected rows. */
 const expireUnstartedActivities = async () => {
   const now = new Date();
 
@@ -829,16 +888,16 @@ const expireUnstartedActivities = async () => {
       startedAt: null,
       endTime: { lt: now },
     },
-    select: { id: true, aid: true, title: true, hostId: true, category: true },
+    select: SWEEP_SELECT,
   });
 
   if (expiredActivities.length === 0) {
-    return 0;
+    return [];
   }
 
   const activityIds = expiredActivities.map((activity) => activity.id);
 
-  const [, activityResult] = await prisma.$transaction([
+  await prisma.$transaction([
     prisma.activityParticipant.updateMany({
       where: {
         activityId: { in: activityIds },
@@ -860,22 +919,47 @@ const expireUnstartedActivities = async () => {
   ]);
 
   await logSystemActions(
-    expiredActivities.map((activity) => ({
-      action: AUDIT_ACTIONS.ACTIVITY_EXPIRED,
-      entityType: ENTITY_TYPES.ACTIVITY,
-      entityId: activity.id,
-      targetUserId: activity.hostId,
-      message: `Activity ${describeActivity(activity)} expired without being started`,
-      metadata: {
-        activityId: activity.id,
-        activityCode: formatActivityCode(activity.aid),
-        title: activity.title,
-        category: activity.category,
-      },
-    }))
+    expiredActivities.map((activity) =>
+      activityLogEntry(activity, AUDIT_ACTIONS.ACTIVITY_EXPIRED, `Activity ${describeActivity(activity)} expired without being started`)
+    )
   );
 
-  return activityResult.count;
+  return expiredActivities.map((activity) => ({ ...activity, status: ActivityStatus.EXPIRED }));
+};
+
+/**
+ * Started activities the host never completed are completed automatically a
+ * while after their end time, so members can post highlights. Returns the affected rows.
+ */
+const autoCompleteActivities = async () => {
+  const cutoff = new Date(Date.now() - env.activity.autoCompleteGraceMinutes * MINUTE_MS);
+
+  const overdue = await prisma.activity.findMany({
+    where: { status: ActivityStatus.ACTIVE, endTime: { lt: cutoff } },
+    select: SWEEP_SELECT,
+  });
+
+  if (!overdue.length) return [];
+
+  const ids = overdue.map((activity) => activity.id);
+  await prisma.$transaction([
+    prisma.activityParticipant.updateMany({
+      where: { activityId: { in: ids }, isHost: false, status: ParticipantStatus.PENDING },
+      data: { status: ParticipantStatus.EXPIRED },
+    }),
+    prisma.activity.updateMany({
+      where: { id: { in: ids }, status: ActivityStatus.ACTIVE },
+      data: { status: ActivityStatus.COMPLETED, completedAt: new Date() },
+    }),
+  ]);
+
+  await logSystemActions(
+    overdue.map((activity) =>
+      activityLogEntry(activity, AUDIT_ACTIONS.ACTIVITY_COMPLETED, `Activity ${describeActivity(activity)} completed automatically after its end time`)
+    )
+  );
+
+  return overdue.map((activity) => ({ ...activity, status: ActivityStatus.COMPLETED }));
 };
 
 module.exports = {
@@ -895,6 +979,9 @@ module.exports = {
   listHostedActivities,
   listJoinedActivities,
   expireUnstartedActivities,
+  autoCompleteActivities,
   getApprovedCount,
   formatActivityResponse,
+  formatActivityList,
+  lockActivity,
 };

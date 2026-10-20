@@ -7,11 +7,11 @@ const server = app.listen(env.port, () => {
   console.log(`Server running on port ${env.port} (${env.nodeEnv})`);
 });
 
-const expiryInterval = startActivityExpiryJob();
+const jobs = startActivityExpiryJob();
 
 const shutdown = async (signal) => {
   console.log(`${signal} received. Shutting down gracefully...`);
-  clearInterval(expiryInterval);
+  jobs.stop();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);
@@ -19,4 +19,6 @@ const shutdown = async (signal) => {
 };
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+// Never let one stray promise take the whole server down; log it instead.
+process.on('unhandledRejection', (reason) => console.error('Unhandled rejection:', reason));
 process.on('SIGINT', () => shutdown('SIGINT'));

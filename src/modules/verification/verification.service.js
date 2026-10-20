@@ -2,7 +2,7 @@ const fs = require('fs');
 const { VerificationStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
-const { VERIFICATION_SUBMISSION_SELECT } = require('./verification.constants');
+const { VERIFICATION_SUBMISSION_SELECT, signVerification } = require('./verification.constants');
 
 const removeUploadedFiles = (files = []) => {
   files.forEach((file) => {
@@ -59,7 +59,7 @@ const uploadVerificationImages = async (userId, files) => {
     return createdSubmission;
   });
 
-  return submission;
+  return signVerification(submission);
 };
 
 const getVerificationStatus = async (userId) => {
@@ -73,7 +73,7 @@ const getVerificationStatus = async (userId) => {
     throw new AppError('No verification submission found', 404);
   }
 
-  return submission;
+  return signVerification(submission);
 };
 
 module.exports = {

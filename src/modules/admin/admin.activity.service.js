@@ -23,42 +23,8 @@ const {
 
 const STARTING_SOON_MS = 2 * 60 * 60 * 1000;
 
-const emptyCounts = () => ({
-  approved: 0,
-  pending: 0,
-  rejected: 0,
-  withdrawn: 0,
-  expired: 0,
-});
-
-/** Participant counts for many activities in one grouped query. */
-const loadParticipantCounts = async (activityIds) => {
-  if (!activityIds.length) {
-    return new Map();
-  }
-
-  const rows = await prisma.activityParticipant.groupBy({
-    by: ['activityId', 'status', 'isHost'],
-    where: { activityId: { in: activityIds } },
-    _count: { _all: true },
-  });
-
-  const counts = new Map();
-
-  for (const row of rows) {
-    const entry = counts.get(row.activityId) || emptyCounts();
-    const key = row.status.toLowerCase();
-
-    // approvedCount includes the host (same rule as the user API); the rest are joiners only.
-    if (row.status === ParticipantStatus.APPROVED || !row.isHost) {
-      entry[key] = (entry[key] || 0) + row._count._all;
-    }
-
-    counts.set(row.activityId, entry);
-  }
-
-  return counts;
-};
+// Grouped participant counts are shared with the user API.
+const { loadParticipantCounts, emptyCounts } = require('../activity/activity.stats');
 
 const liveStateOf = (activity, now = new Date()) => {
   if (activity.status === ActivityStatus.ACTIVE) {

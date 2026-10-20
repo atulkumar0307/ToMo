@@ -1,6 +1,11 @@
 const { ActivityStatus, ParticipantStatus, VerificationStatus, HighlightStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
 const { AUDIT_LOG_SELECT, USER_BRIEF_SELECT, ADMIN_VERIFICATION_SELECT } = require('./admin.constants');
+const { signVerification } = require('../verification/verification.constants');
+const { TtlCache } = require('../../utils/cache');
+
+// Many admin tabs poll the dashboard; one computation every 15s serves them all.
+const dashboardCache = new TtlCache({ ttlMs: 15 * 1000, maxEntries: 1 });
 
 const TREND_DAYS = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -212,10 +217,13 @@ const getDashboard = async () => {
       today: logsToday,
     },
     recentUsers,
-    pendingVerifications,
+    pendingVerifications: pendingVerifications.map(signVerification),
     recentLogs,
     trends,
   };
 };
 
-module.exports = { getDashboard };
+const getCachedDashboard = () => dashboardCache.wrap('dashboard', getDashboard);
+const invalidateDashboard = () => dashboardCache.clear();
+
+module.exports = { getDashboard: getCachedDashboard, invalidateDashboard };
