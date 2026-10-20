@@ -53,7 +53,10 @@ const parseTags = (value) => {
       return { error: `Each tag must be at most ${MAX_TAG_LENGTH} characters` };
     }
 
-    tags.push(normalized);
+    // "Coffee" and "coffee" normalize to the same tag; keep it once.
+    if (!tags.includes(normalized)) {
+      tags.push(normalized);
+    }
   }
 
   return { tags };

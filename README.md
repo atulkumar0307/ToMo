@@ -108,15 +108,31 @@ Collection includes validation examples (`[400]`, `[403]`) and auto-sets `activi
 | GET    | `/api/user/highlights/:highlightId` | Bearer   |
 | PATCH  | `/api/user/highlights/:highlightId` | Bearer (author) |
 | DELETE | `/api/user/highlights/:highlightId` | Bearer (author or host) |
-| POST   | `/api/admin/register`    | No       |
+| GET    | `/api/admin/setup-status` | No — `{ needsSetup }` while no admin exists |
+| POST   | `/api/admin/register`    | No — **only while no admin exists** (first admin), 403 afterwards |
 | POST   | `/api/admin/login`       | No       |
 | POST   | `/api/admin/refresh-token` | No     |
 | POST   | `/api/admin/logout`      | No       |
-| GET    | `/api/admin/activities`  | Admin Bearer |
-| GET    | `/api/admin/users`       | Admin Bearer |
-| PATCH  | `/api/admin/users/:userId/block` | Admin Bearer |
-| PATCH  | `/api/admin/users/:userId/profile` | Admin Bearer |
-| PATCH  | `/api/admin/verifications/:verificationId` | Admin Bearer |
+
+### Admin API (all `Admin Bearer`)
+
+The React admin panel lives in `../../Admin`.
+
+| Area | Endpoints |
+| ---- | --------- |
+| Own account | `GET /me`, `PATCH /me` `{fullName}`, `PATCH /me/password` `{currentPassword,newPassword,refreshToken?}` |
+| Admin accounts | `GET /admins`, `POST /admins`, `PATCH /admins/:adminId` `{fullName?,isActive?,password?}`, `DELETE /admins/:adminId` |
+| Dashboard | `GET /dashboard` — totals, 14-day trends (`ADMIN_TIMEZONE`, default Asia/Kolkata), queues, recent logs |
+| Activity log | `GET /logs` (`page, limit, q, actorType, action, group, entityType, entityId, userId, adminId, targetUserId, involvesUserId, from, to, after`), `GET /logs/actions` |
+| Users | `GET /users` (`q, blocked, verified, completed, gender, verification=PENDING\|APPROVED\|REJECTED\|NONE, sort`), `POST /users` (multipart), `GET /users/:userId`, `PATCH /users/:userId/profile` (multipart), `PATCH /users/:userId/block`, `DELETE /users/:userId`, `DELETE /users/:userId/profile-image`, `GET /users/:userId/activities?type=hosted\|joined`, `GET /users/:userId/highlights`, `GET /users/:userId/verifications`, `GET /users/:userId/sessions`, `DELETE /users/:userId/sessions` |
+| Verifications | `GET /verifications` (`status, q, sort`), `GET /verifications/:id`, `PATCH /verifications/:id` `{status, remark}` |
+| Activities | `GET /activities` (`status` (comma list), `category, q, hostId, from, to, live, size, sort`), `POST /activities` `{hostId\|hostUid\|hostMobile, …app fields}`, `GET /activities/live`, `GET /activities/:id`, `PATCH /activities/:id` (partial), `PATCH /activities/:id/status` `{status, reason?}`, `DELETE /activities/:id[?hard=true]` |
+| Participants | `GET /activities/:id/participants`, `POST /activities/:id/participants` `{userId\|uid\|mobile, force?}`, `PATCH /activities/:id/participants/:userId` `{status, force?}`, `DELETE /activities/:id/participants/:userId`, `GET /join-requests` |
+| Highlights | `GET /highlights` (`status, activityId, userId, category, tag, mediaType, q, sort`), `GET /highlights/:id`, `PATCH /highlights/:id` `{title?,caption?,description?,tags?,status?}`, `DELETE /highlights/:id[?hard=true]`, `DELETE /highlights/:id/media/:mediaId` |
+
+### Audit log
+
+Every user action (OTP request, sign-up/login/logout, profile edits, verification submissions, activity create/edit/start/complete/cancel/delete, join/withdraw/approve/reject, highlight post/edit/delete), every admin action, and the expiry job (as `SYSTEM`) write an `AuditLog` row. The row records the actor, the target user, the entity, a readable message, metadata, the IP address and the user agent. A logging failure never fails the request. Deleting a user keeps their log rows; the actor relation is set to null and the readable `actorLabel` is kept.
 
 ## Development OTP
 

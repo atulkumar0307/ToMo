@@ -1,5 +1,7 @@
 const { AppError } = require('../../utils/errors');
 const { sendSuccess } = require('../../utils/response');
+const { logUserAction, describeActivity, userLabel } = require('../../utils/audit');
+const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const activityService = require('./activity.service');
 const {
   validateCreateActivity,
@@ -8,6 +10,22 @@ const {
   validateListQuery,
   validateParticipantUserId,
 } = require('./activity.validation');
+
+const logActivityAction = (req, action, activity, message, extra = {}) => {
+  logUserAction(req, action, {
+    entityType: ENTITY_TYPES.ACTIVITY,
+    entityId: activity.id,
+    targetUserId: extra.targetUserId || activity.hostId,
+    message,
+    metadata: {
+      activityId: activity.id,
+      activityCode: activity.activityCode,
+      title: activity.title,
+      category: activity.category,
+      ...extra.metadata,
+    },
+  });
+};
 
 const createActivity = async (req, res, next) => {
   try {
@@ -18,6 +36,21 @@ const createActivity = async (req, res, next) => {
     }
 
     const activity = await activityService.createActivity(req.userId, validation.data);
+
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.ACTIVITY_CREATED,
+      activity,
+      `Created activity ${describeActivity(activity)}`,
+      {
+        metadata: {
+          locationName: activity.locationName,
+          city: activity.city,
+          startTime: activity.startTime,
+          maxParticipants: activity.maxParticipants,
+        },
+      }
+    );
 
     return sendSuccess(
       res,
@@ -46,6 +79,13 @@ const updateActivity = async (req, res, next) => {
       validation.data
     );
 
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.ACTIVITY_UPDATED,
+      activity,
+      `Edited activity ${describeActivity(activity)}`
+    );
+
     return sendSuccess(res, {
       activity,
       message: 'Activity updated successfully',
@@ -58,6 +98,13 @@ const updateActivity = async (req, res, next) => {
 const deleteActivity = async (req, res, next) => {
   try {
     const activity = await activityService.deleteActivity(req.userId, req.params.id);
+
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.ACTIVITY_DELETED,
+      activity,
+      `Deleted activity ${describeActivity(activity)}`
+    );
 
     return sendSuccess(res, {
       activity,
@@ -72,6 +119,14 @@ const cancelActivity = async (req, res, next) => {
   try {
     const activity = await activityService.cancelActivity(req.userId, req.params.id);
 
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.ACTIVITY_CANCELLED,
+      activity,
+      `Cancelled activity ${describeActivity(activity)}`,
+      { metadata: { approvedCount: activity.approvedCount, pendingCount: activity.pendingCount } }
+    );
+
     return sendSuccess(res, {
       activity,
       message: 'Activity cancelled successfully',
@@ -85,6 +140,14 @@ const startActivity = async (req, res, next) => {
   try {
     const activity = await activityService.startActivity(req.userId, req.params.id);
 
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.ACTIVITY_STARTED,
+      activity,
+      `Started activity ${describeActivity(activity)}`,
+      { metadata: { approvedCount: activity.approvedCount } }
+    );
+
     return sendSuccess(res, {
       activity,
       message: 'Activity started successfully',
@@ -97,6 +160,14 @@ const startActivity = async (req, res, next) => {
 const completeActivity = async (req, res, next) => {
   try {
     const activity = await activityService.completeActivity(req.userId, req.params.id);
+
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.ACTIVITY_COMPLETED,
+      activity,
+      `Completed activity ${describeActivity(activity)}`,
+      { metadata: { approvedCount: activity.approvedCount } }
+    );
 
     return sendSuccess(res, {
       activity,
@@ -121,6 +192,13 @@ const joinActivity = async (req, res, next) => {
   try {
     const result = await activityService.joinActivity(req.userId, req.params.id);
 
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.JOIN_REQUESTED,
+      result.activity,
+      `Requested to join ${describeActivity(result.activity)}`
+    );
+
     return sendSuccess(
       res,
       {
@@ -137,6 +215,13 @@ const joinActivity = async (req, res, next) => {
 const withdrawJoinRequest = async (req, res, next) => {
   try {
     const result = await activityService.withdrawJoinRequest(req.userId, req.params.id);
+
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.JOIN_WITHDRAWN,
+      result.activity,
+      `Withdrew join request for ${describeActivity(result.activity)}`
+    );
 
     return sendSuccess(res, {
       ...result,
@@ -171,6 +256,17 @@ const approveParticipant = async (req, res, next) => {
       req.params.userId
     );
 
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.JOIN_APPROVED,
+      result.activity,
+      `Approved ${userLabel(result.participant.user)}'s request for ${describeActivity(result.activity)}`,
+      {
+        targetUserId: req.params.userId,
+        metadata: { participantUserId: req.params.userId },
+      }
+    );
+
     return sendSuccess(res, {
       ...result,
       message: 'Participant approved successfully',
@@ -192,6 +288,17 @@ const rejectParticipant = async (req, res, next) => {
       req.userId,
       req.params.id,
       req.params.userId
+    );
+
+    logActivityAction(
+      req,
+      AUDIT_ACTIONS.JOIN_REJECTED,
+      result.activity,
+      `Rejected ${userLabel(result.participant.user)}'s request for ${describeActivity(result.activity)}`,
+      {
+        targetUserId: req.params.userId,
+        metadata: { participantUserId: req.params.userId },
+      }
     );
 
     return sendSuccess(res, {

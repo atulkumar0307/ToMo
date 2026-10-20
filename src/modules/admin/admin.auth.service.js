@@ -32,7 +32,12 @@ const issueAdminSessionTokens = async (admin) => {
   return { accessToken, refreshToken, admin };
 };
 
-const registerAdmin = async ({ email, password, fullName }) => {
+const getSetupStatus = async () => {
+  const adminCount = await prisma.admin.count();
+  return { needsSetup: adminCount === 0 };
+};
+
+const createAdminRecord = async ({ email, password, fullName }) => {
   const normalizedEmail = email.trim().toLowerCase();
 
   const existingAdmin = await prisma.admin.findUnique({
@@ -46,7 +51,7 @@ const registerAdmin = async ({ email, password, fullName }) => {
 
   const passwordHash = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
 
-  const admin = await prisma.admin.create({
+  return prisma.admin.create({
     data: {
       email: normalizedEmail,
       passwordHash,
@@ -54,7 +59,23 @@ const registerAdmin = async ({ email, password, fullName }) => {
     },
     select: ADMIN_SELECT,
   });
+};
 
+/**
+ * Public self-registration only bootstraps the very first admin. After that,
+ * new admins are created by an existing admin (POST /api/admin/admins).
+ */
+const registerAdmin = async (payload) => {
+  const { needsSetup } = await getSetupStatus();
+
+  if (!needsSetup) {
+    throw new AppError(
+      'Admin registration is closed. Ask an existing admin to create your account.',
+      403
+    );
+  }
+
+  const admin = await createAdminRecord(payload);
   return issueAdminSessionTokens(admin);
 };
 
@@ -124,20 +145,166 @@ const refreshAdminAccessToken = async (refreshToken) => {
 };
 
 const logoutAdmin = async (refreshToken) => {
-  const result = await prisma.adminRefreshToken.deleteMany({
+  const storedToken = await prisma.adminRefreshToken.findUnique({
     where: { token: refreshToken },
+    select: { id: true, admin: { select: ADMIN_SELECT } },
   });
 
-  if (result.count === 0) {
+  if (!storedToken) {
     throw new AppError('Invalid refresh token', 400);
   }
 
-  return { loggedOut: true };
+  await prisma.adminRefreshToken.deleteMany({ where: { id: storedToken.id } });
+
+  return { loggedOut: true, admin: storedToken.admin };
+};
+
+// ---------------------------------------------------------------------------
+// Own account
+// ---------------------------------------------------------------------------
+
+const updateOwnProfile = async (adminId, { fullName }) => {
+  return prisma.admin.update({
+    where: { id: adminId },
+    data: { fullName: fullName.trim() },
+    select: ADMIN_SELECT,
+  });
+};
+
+const changeOwnPassword = async (adminId, { currentPassword, newPassword, refreshToken }) => {
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: { id: true, passwordHash: true },
+  });
+
+  if (!admin) {
+    throw new AppError('Admin not found', 404);
+  }
+
+  const isValid = await bcrypt.compare(currentPassword, admin.passwordHash);
+
+  if (!isValid) {
+    throw new AppError('Current password is incorrect', 400);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, PASSWORD_SALT_ROUNDS);
+
+  await prisma.$transaction([
+    prisma.admin.update({ where: { id: adminId }, data: { passwordHash } }),
+    // Sign out every other session; keep the one making this request.
+    prisma.adminRefreshToken.deleteMany({
+      where: {
+        adminId,
+        ...(typeof refreshToken === 'string' ? { token: { not: refreshToken } } : {}),
+      },
+    }),
+  ]);
+
+  return { changed: true };
+};
+
+// ---------------------------------------------------------------------------
+// Admin accounts management
+// ---------------------------------------------------------------------------
+
+const ADMIN_LIST_SELECT = {
+  ...ADMIN_SELECT,
+  _count: { select: { refreshTokens: true, auditLogs: true } },
+};
+
+const listAdmins = async () => {
+  const admins = await prisma.admin.findMany({
+    orderBy: { createdAt: 'asc' },
+    select: ADMIN_LIST_SELECT,
+  });
+
+  return { admins };
+};
+
+const createAdmin = async (payload) => createAdminRecord(payload);
+
+const findAdminOrThrow = async (adminId) => {
+  const admin = await prisma.admin.findUnique({
+    where: { id: adminId },
+    select: ADMIN_SELECT,
+  });
+
+  if (!admin) {
+    throw new AppError('Admin not found', 404);
+  }
+
+  return admin;
+};
+
+const assertNotLastActiveAdmin = async (adminId) => {
+  const otherActive = await prisma.admin.count({
+    where: { isActive: true, id: { not: adminId } },
+  });
+
+  if (otherActive === 0) {
+    throw new AppError('At least one active admin must remain', 400);
+  }
+};
+
+const updateAdmin = async (actingAdminId, adminId, body) => {
+  const target = await findAdminOrThrow(adminId);
+  const data = {};
+
+  if (body.fullName !== undefined) {
+    data.fullName = body.fullName.trim();
+  }
+
+  if (body.isActive !== undefined && body.isActive !== target.isActive) {
+    if (!body.isActive) {
+      if (actingAdminId === adminId) {
+        throw new AppError('You cannot deactivate your own account', 400);
+      }
+      await assertNotLastActiveAdmin(adminId);
+    }
+    data.isActive = body.isActive;
+  }
+
+  if (body.password !== undefined) {
+    data.passwordHash = await bcrypt.hash(body.password, PASSWORD_SALT_ROUNDS);
+  }
+
+  const revokeSessions = data.isActive === false || data.passwordHash !== undefined;
+
+  const [admin] = await prisma.$transaction([
+    prisma.admin.update({ where: { id: adminId }, data, select: ADMIN_LIST_SELECT }),
+    ...(revokeSessions && actingAdminId !== adminId
+      ? [prisma.adminRefreshToken.deleteMany({ where: { adminId } })]
+      : []),
+  ]);
+
+  return { admin, changes: Object.keys(data).map((key) => (key === 'passwordHash' ? 'password' : key)) };
+};
+
+const deleteAdmin = async (actingAdminId, adminId) => {
+  const target = await findAdminOrThrow(adminId);
+
+  if (actingAdminId === adminId) {
+    throw new AppError('You cannot delete your own account', 400);
+  }
+
+  if (target.isActive) {
+    await assertNotLastActiveAdmin(adminId);
+  }
+
+  await prisma.admin.delete({ where: { id: adminId } });
+  return target;
 };
 
 module.exports = {
+  getSetupStatus,
   registerAdmin,
   loginAdmin,
   refreshAdminAccessToken,
   logoutAdmin,
+  updateOwnProfile,
+  changeOwnPassword,
+  listAdmins,
+  createAdmin,
+  updateAdmin,
+  deleteAdmin,
 };

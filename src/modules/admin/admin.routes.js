@@ -2,9 +2,14 @@ const { Router } = require('express');
 const { authenticateAdmin } = require('../../middleware/adminAuth');
 const { uploadProfileImage } = require('../../middleware/upload');
 const adminController = require('./admin.controller');
+const usersController = require('./admin.users.controller');
+const activityController = require('./admin.activity.controller');
+const highlightController = require('./admin.highlight.controller');
 
 const router = Router();
 
+// Public: session endpoints. Register only works while no admin exists.
+router.get('/setup-status', adminController.setupStatus);
 router.post('/register', adminController.register);
 router.post('/login', adminController.login);
 router.post('/refresh-token', adminController.refreshToken);
@@ -12,17 +17,67 @@ router.post('/logout', adminController.logout);
 
 router.use(authenticateAdmin);
 
-router.get('/activities', adminController.listActivities);
-router.get('/users', adminController.listUsers);
-router.patch('/users/:userId/block', adminController.blockUser);
+// Own account
+router.get('/me', adminController.getMe);
+router.patch('/me', adminController.updateMe);
+router.patch('/me/password', adminController.changePassword);
+
+// Admin accounts
+router.get('/admins', adminController.listAdmins);
+router.post('/admins', adminController.createAdmin);
+router.patch('/admins/:adminId', adminController.updateAdmin);
+router.delete('/admins/:adminId', adminController.deleteAdmin);
+
+// Dashboard & activity log
+router.get('/dashboard', adminController.getDashboard);
+router.get('/logs', adminController.listLogs);
+router.get('/logs/actions', adminController.getLogActions);
+
+// Users
+router.get('/users', usersController.listUsers);
+router.post('/users', uploadProfileImage.single('profileImage'), usersController.createUser);
+router.get('/users/:userId', usersController.getUser);
+router.delete('/users/:userId', usersController.deleteUser);
+router.patch('/users/:userId/block', usersController.blockUser);
 router.patch(
   '/users/:userId/profile',
   uploadProfileImage.single('profileImage'),
-  adminController.updateUserProfile
+  usersController.updateUserProfile
 );
+router.delete('/users/:userId/profile-image', usersController.removeProfileImage);
+router.get('/users/:userId/activities', usersController.listUserActivities);
+router.get('/users/:userId/highlights', usersController.listUserHighlights);
+router.get('/users/:userId/verifications', usersController.listUserVerifications);
+router.get('/users/:userId/sessions', usersController.listSessions);
+router.delete('/users/:userId/sessions', usersController.revokeSessions);
+
+// Verifications
+router.get('/verifications', usersController.listVerifications);
+router.get('/verifications/:verificationId', usersController.getVerification);
+router.patch('/verifications/:verificationId', usersController.reviewVerification);
+
+// Activities & participants
+router.get('/activities', activityController.listActivities);
+router.post('/activities', activityController.createActivity);
+router.get('/activities/live', activityController.listLiveGroups);
+router.get('/activities/:activityId', activityController.getActivity);
+router.patch('/activities/:activityId', activityController.updateActivity);
+router.patch('/activities/:activityId/status', activityController.changeStatus);
+router.delete('/activities/:activityId', activityController.deleteActivity);
+router.get('/activities/:activityId/participants', activityController.listParticipants);
+router.post('/activities/:activityId/participants', activityController.addParticipant);
 router.patch(
-  '/verifications/:verificationId',
-  adminController.reviewVerification
+  '/activities/:activityId/participants/:userId',
+  activityController.changeParticipantStatus
 );
+router.delete('/activities/:activityId/participants/:userId', activityController.removeParticipant);
+router.get('/join-requests', activityController.listJoinRequests);
+
+// Highlights
+router.get('/highlights', highlightController.listHighlights);
+router.get('/highlights/:highlightId', highlightController.getHighlight);
+router.patch('/highlights/:highlightId', highlightController.updateHighlight);
+router.delete('/highlights/:highlightId', highlightController.deleteHighlight);
+router.delete('/highlights/:highlightId/media/:mediaId', highlightController.removeMedia);
 
 module.exports = router;

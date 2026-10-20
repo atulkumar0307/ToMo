@@ -29,15 +29,14 @@ const uploadVerificationImages = async (userId, files) => {
     );
   }
 
-  const approvedVerification = await prisma.verificationSubmission.findFirst({
-    where: {
-      userId,
-      status: VerificationStatus.APPROVED,
-    },
-    select: { id: true },
+  // The user flag, not an old APPROVED submission, decides: an admin may have
+  // revoked verification since, and the user must then be able to resubmit.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isProfileVerified: true },
   });
 
-  if (approvedVerification) {
+  if (user?.isProfileVerified) {
     removeUploadedFiles(files);
     throw new AppError('Your profile is already verified.', 409);
   }

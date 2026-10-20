@@ -19,6 +19,8 @@ const USER_SELECT = {
 const VERIFY_OTP_USER_SELECT = {
   id: true,
   uid: true,
+  mobile: true,
+  fullName: true,
   isBlocked: true,
   isProfileCompleted: true,
   isProfileVerified: true,

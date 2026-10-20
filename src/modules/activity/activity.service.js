@@ -11,6 +11,8 @@ const {
   PARTICIPANT_SELECT,
 } = require('./activity.constants');
 const { getNextActivityAid, formatActivityCode } = require('../../utils/activityAid');
+const { logSystemActions, describeActivity } = require('../../utils/audit');
+const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 
 const assertVerifiedProfile = (user) => {
   if (user.isBlocked) {
@@ -827,7 +829,7 @@ const expireUnstartedActivities = async () => {
       startedAt: null,
       endTime: { lt: now },
     },
-    select: { id: true },
+    select: { id: true, aid: true, title: true, hostId: true, category: true },
   });
 
   if (expiredActivities.length === 0) {
@@ -856,6 +858,22 @@ const expireUnstartedActivities = async () => {
       },
     }),
   ]);
+
+  await logSystemActions(
+    expiredActivities.map((activity) => ({
+      action: AUDIT_ACTIONS.ACTIVITY_EXPIRED,
+      entityType: ENTITY_TYPES.ACTIVITY,
+      entityId: activity.id,
+      targetUserId: activity.hostId,
+      message: `Activity ${describeActivity(activity)} expired without being started`,
+      metadata: {
+        activityId: activity.id,
+        activityCode: formatActivityCode(activity.aid),
+        title: activity.title,
+        category: activity.category,
+      },
+    }))
+  );
 
   return activityResult.count;
 };

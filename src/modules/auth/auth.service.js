@@ -24,7 +24,7 @@ const sendOtp = async (mobile, action) => {
 
   const existingUser = await prisma.user.findUnique({
     where: { mobile: normalizedMobile },
-    select: { isBlocked: true },
+    select: { id: true, uid: true, mobile: true, fullName: true, isBlocked: true },
   });
 
   if (existingUser) {
@@ -42,7 +42,11 @@ const sendOtp = async (mobile, action) => {
     },
   });
 
-  return { action: normalizedAction };
+  return {
+    result: { action: normalizedAction },
+    user: existingUser || null,
+    mobile: normalizedMobile,
+  };
 };
 
 const findValidOtp = async (mobile, action, otp) => {
@@ -78,10 +82,10 @@ const resolveUserAfterLogin = async (mobile) => {
 
   if (existingUser) {
     assertUserNotBlocked(existingUser);
-    return existingUser;
+    return { user: existingUser, isNewUser: false };
   }
 
-  return prisma.$transaction(async (tx) => {
+  const user = await prisma.$transaction(async (tx) => {
     const uid = await getNextUserUid(tx);
 
     return tx.user.create({
@@ -94,6 +98,8 @@ const resolveUserAfterLogin = async (mobile) => {
       select: VERIFY_OTP_USER_SELECT,
     });
   });
+
+  return { user, isNewUser: true };
 };
 
 const issueSessionTokens = async (user) => {
@@ -134,8 +140,9 @@ const verifyOtp = async (mobile, otp, action) => {
   }
 
   if (normalizedAction === OTP_ACTIONS.LOGIN) {
-    const user = await resolveUserAfterLogin(mobile);
-    return issueSessionTokens(user);
+    const { user, isNewUser } = await resolveUserAfterLogin(mobile);
+    const session = await issueSessionTokens(user);
+    return { session, user, isNewUser };
   }
 
   throw new AppError('OTP action not supported for verification', 400);
@@ -189,15 +196,21 @@ const refreshAccessToken = async (refreshToken) => {
 };
 
 const logout = async (refreshToken) => {
-  const result = await prisma.refreshToken.deleteMany({
+  const storedToken = await prisma.refreshToken.findUnique({
     where: { token: refreshToken },
+    select: {
+      id: true,
+      user: { select: { id: true, uid: true, mobile: true, fullName: true } },
+    },
   });
 
-  if (result.count === 0) {
+  if (!storedToken) {
     throw new AppError('Invalid refresh token', 400);
   }
 
-  return { loggedOut: true };
+  await prisma.refreshToken.deleteMany({ where: { id: storedToken.id } });
+
+  return { loggedOut: true, user: storedToken.user };
 };
 
 module.exports = {

@@ -65,6 +65,12 @@ enum MediaType {
   VIDEO
 }
 
+enum ActorType {
+  USER
+  ADMIN
+  SYSTEM
+}
+
 model Counter {
   id    String @id
   value Int    @default(0)
@@ -91,6 +97,8 @@ model User {
   hostedActivities      Activity[]            @relation("HostedActivities")
   activityParticipants  ActivityParticipant[]
   highlights            Highlight[]
+  auditLogs             AuditLog[]            @relation("AuditActor")
+  targetedAuditLogs     AuditLog[]            @relation("AuditTarget")
 
   @@index([mobile])
 }
@@ -206,6 +214,7 @@ model Admin {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   refreshTokens AdminRefreshToken[]
+  auditLogs     AuditLog[]
 
   @@index([email])
 }
@@ -259,4 +268,32 @@ model HighlightMediaItem {
   highlight        Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
 
   @@index([highlightId])
+}
+
+model AuditLog {
+  id           String    @id @default(uuid())
+  actorType    ActorType
+  userId       String?
+  adminId      String?
+  actorLabel   String?
+  action       String
+  entityType   String?
+  entityId     String?
+  targetUserId String?
+  message      String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  user         User?     @relation("AuditActor", fields: [userId], references: [id], onDelete: SetNull)
+  targetUser   User?     @relation("AuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  admin        Admin?    @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([adminId, createdAt])
+  @@index([actorType, createdAt])
+  @@index([action])
+  @@index([entityType, entityId])
 }

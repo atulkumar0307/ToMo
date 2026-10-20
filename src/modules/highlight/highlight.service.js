@@ -204,7 +204,7 @@ const buildMediaRecords = async (files, mediaOrder) => {
     let durationSeconds = null;
 
     if (isVideo) {
-      durationSeconds = await getVideoDurationSeconds(file.path);
+      durationSeconds = await getVideoDurationSeconds(file.path, file.mimetype);
 
       if (durationSeconds === null) {
         throw new AppError('Could not read video duration', 400);
@@ -254,14 +254,12 @@ const fetchPublishedHighlightOrThrow = async (highlightId) => {
 };
 
 const createHighlight = async (userId, activityId, data, files) => {
-  const activity = await fetchActivityOrThrow(activityId);
-  await assertCanPostHighlight(activity, userId);
-
-  validateMediaFileSizes(files);
-
   let mediaRecords;
 
   try {
+    const activity = await fetchActivityOrThrow(activityId);
+    await assertCanPostHighlight(activity, userId);
+    validateMediaFileSizes(files);
     mediaRecords = await buildMediaRecords(files, data.mediaOrder);
   } catch (err) {
     removeUploadedFiles(files);
