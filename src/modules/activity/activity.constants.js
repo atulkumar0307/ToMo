@@ -1,15 +1,22 @@
 const { ActivityCategory, ActivityStatus } = require('@prisma/client');
+const { setting } = require('../../services/settings');
 
 const TITLE_MIN = 5;
 const TITLE_MAX = 100;
 const DESCRIPTION_MIN = 10;
 const DESCRIPTION_MAX = 1000;
-const MIN_PARTICIPANTS = 2;
-const MAX_PARTICIPANTS = 20;
-const MIN_DURATION_MS = 30 * 60 * 1000;
-const MAX_DURATION_MS = 8 * 60 * 60 * 1000;
-const MIN_LEAD_TIME_MS = 30 * 60 * 1000;
-const MAX_START_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const MINUTE_MS = 60 * 1000;
+
+/** Scheduling and size rules, editable in admin → Configuration. Read per request. */
+const activityLimits = () => ({
+  minParticipants: setting('activity.minParticipants'),
+  maxParticipants: setting('activity.maxParticipants'),
+  minDurationMs: setting('activity.minDurationMinutes') * MINUTE_MS,
+  maxDurationMs: setting('activity.maxDurationHours') * 60 * MINUTE_MS,
+  minLeadMs: setting('activity.minLeadMinutes') * MINUTE_MS,
+  maxStartWindowMs: setting('activity.maxStartWindowHours') * 60 * MINUTE_MS,
+});
 
 const ALLOWED_CATEGORIES = Object.values(ActivityCategory);
 
@@ -82,12 +89,7 @@ module.exports = {
   TITLE_MAX,
   DESCRIPTION_MIN,
   DESCRIPTION_MAX,
-  MIN_PARTICIPANTS,
-  MAX_PARTICIPANTS,
-  MIN_DURATION_MS,
-  MAX_DURATION_MS,
-  MIN_LEAD_TIME_MS,
-  MAX_START_WINDOW_MS,
+  activityLimits,
   ALLOWED_CATEGORIES,
   DISCOVERY_STATUSES,
   SCHEDULE_BLOCKING_STATUSES,

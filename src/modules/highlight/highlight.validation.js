@@ -3,7 +3,7 @@ const {
   CAPTION_MAX,
   DESCRIPTION_MAX,
   MIN_MEDIA,
-  MAX_MEDIA,
+  highlightLimits,
   MAX_TAGS,
   MAX_TAG_LENGTH,
   ALLOWED_IMAGE_MIME_TYPES,
@@ -141,8 +141,9 @@ const validateMediaUpload = (files) => {
     return `Upload at least ${MIN_MEDIA} media file`;
   }
 
-  if (files.length > MAX_MEDIA) {
-    return `Upload at most ${MAX_MEDIA} media files`;
+  const { maxMedia } = highlightLimits();
+  if (files.length > maxMedia) {
+    return `Upload at most ${maxMedia} media files`;
   }
 
   for (const file of files) {

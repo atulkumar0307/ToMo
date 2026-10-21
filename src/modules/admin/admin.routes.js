@@ -13,6 +13,7 @@ const loginLimits = rateLimit([
     name: 'admin-login',
     windowMs: 15 * 60 * 1000,
     max: 10,
+    onlyFailures: true,
     key: (req) => `${clientIp(req)}:${String(req.body?.email || '').toLowerCase()}`,
     message: 'Too many sign-in attempts. Try again in 15 minutes.',
   },
@@ -50,6 +51,11 @@ router.delete('/admins/:adminId', adminController.deleteAdmin);
 router.get('/dashboard', adminController.getDashboard);
 router.get('/logs', adminController.listLogs);
 router.get('/logs/actions', adminController.getLogActions);
+
+// Configuration (runtime settings)
+router.get('/config', adminController.getConfig);
+router.patch('/config', adminController.updateConfig);
+router.post('/config/reset', adminController.resetConfig);
 
 // Users
 router.get('/users', usersController.listUsers);
@@ -99,5 +105,7 @@ router.get('/highlights/:highlightId', highlightController.getHighlight);
 router.patch('/highlights/:highlightId', highlightController.updateHighlight);
 router.delete('/highlights/:highlightId', highlightController.deleteHighlight);
 router.delete('/highlights/:highlightId/media/:mediaId', highlightController.removeMedia);
+router.get('/highlights/:highlightId/comments', highlightController.listComments);
+router.delete('/highlights/:highlightId/comments/:commentId', highlightController.deleteComment);
 
 module.exports = router;

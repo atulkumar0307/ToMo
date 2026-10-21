@@ -107,6 +107,9 @@ model User {
   targetedAuditLogs       AuditLog[]               @relation("AuditTarget")
   deviceTokens            DeviceToken[]
   chatReads               ChatReadState[]
+  highlightLikes          HighlightLike[]
+  highlightComments       HighlightComment[]
+  notifications           Notification[]
   chatMessages            ChatMessage[]
 
   @@index([mobile])
@@ -227,6 +230,7 @@ model Admin {
   updatedAt     DateTime            @updatedAt
   refreshTokens AdminRefreshToken[]
   auditLogs     AuditLog[]
+  settings      AppSetting[]
 
   @@index([email])
 }
@@ -253,12 +257,16 @@ model Highlight {
   description     String?
   tags            String[]             @default([])
   clientRequestId String?
+  likeCount       Int                  @default(0)
+  commentCount    Int                  @default(0)
   status          HighlightStatus      @default(PUBLISHED)
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
   activity        Activity             @relation(fields: [activityId], references: [id], onDelete: Cascade)
   user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   mediaItems      HighlightMediaItem[]
+  likes           HighlightLike[]
+  comments        HighlightComment[]
 
   @@unique([userId, clientRequestId])
   @@index([activityId])
@@ -353,4 +361,57 @@ model ChatReadState {
 
   @@id([activityId, userId])
   @@index([userId])
+}
+
+/// Runtime configuration edited from the admin panel (Configuration page).
+/// A missing row means "use the default" (from .env or the code).
+model AppSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+  updatedBy   Admin?   @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+model HighlightLike {
+  highlightId String
+  userId      String
+  createdAt   DateTime  @default(now())
+  highlight   Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([highlightId, userId])
+  @@index([userId])
+}
+
+model HighlightComment {
+  id          String    @id @default(uuid())
+  highlightId String
+  userId      String?
+  text        String
+  clientId    String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  highlight   Highlight @relation(fields: [highlightId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, clientId])
+  @@index([highlightId, createdAt])
+}
+
+/// In-app notification inbox (the bell). Push alerts are saved here too.
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }

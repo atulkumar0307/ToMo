@@ -1,5 +1,5 @@
 const prisma = require('../../config/database');
-const env = require('../../config/env');
+const { setting } = require('../../services/settings');
 const realtime = require('../../services/realtime');
 const chatService = require('../chat/chat.service');
 const activityService = require('./activity.service');
@@ -41,19 +41,22 @@ const sweepActivities = async () => {
 const cleanup = async () => {
   try {
     const now = new Date();
-    const [refresh, adminRefresh, otps, logs] = await Promise.all([
+    const [refresh, adminRefresh, otps, logs, notices] = await Promise.all([
       prisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } }),
       prisma.adminRefreshToken.deleteMany({ where: { expiresAt: { lt: now } } }),
-      prisma.otp.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - DAY_MS) } } }),
-      env.retention.auditLogDays > 0
-        ? prisma.auditLog.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - env.retention.auditLogDays * DAY_MS) } } })
+      prisma.otp.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - setting('retention.otpHours') * 60 * 60 * 1000) } } }),
+      setting('retention.auditLogDays') > 0
+        ? prisma.auditLog.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - setting('retention.auditLogDays') * DAY_MS) } } })
         : Promise.resolve({ count: 0 }),
+      prisma.notification.deleteMany({
+        where: { createdAt: { lt: new Date(now.getTime() - setting('retention.notificationDays') * DAY_MS) } },
+      }),
     ]);
 
-    const total = refresh.count + adminRefresh.count + otps.count + logs.count;
+    const total = refresh.count + adminRefresh.count + otps.count + logs.count + notices.count;
     if (total) {
       console.log(
-        `Cleanup: ${refresh.count} expired sessions, ${adminRefresh.count} admin sessions, ${otps.count} OTPs, ${logs.count} old log entries`
+        `Cleanup: ${refresh.count} expired sessions, ${adminRefresh.count} admin sessions, ${otps.count} OTPs, ${logs.count} old log entries, ${notices.count} old notifications`
       );
     }
   } catch (err) {

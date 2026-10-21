@@ -1,8 +1,8 @@
-const VERIFIED_FIELD_COOLDOWN_DAYS = 14;
-const VERIFIED_FIELD_COOLDOWN_MS =
-  VERIFIED_FIELD_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+const { setting } = require('../../services/settings');
+
+/** Editable in admin → Configuration. */
+const verifiedFieldCooldownMs = () => setting('profile.nameDobCooldownDays') * 24 * 60 * 60 * 1000;
 
 module.exports = {
-  VERIFIED_FIELD_COOLDOWN_DAYS,
-  VERIFIED_FIELD_COOLDOWN_MS,
+  verifiedFieldCooldownMs,
 };

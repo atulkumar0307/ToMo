@@ -1,5 +1,11 @@
-const MIN_IMAGES = 3;
-const MAX_IMAGES = 5;
+const { setting } = require('../../services/settings');
+
+/** Upload hard ceiling; the live limits come from admin → Configuration. */
+const MAX_IMAGES_CEILING = 10;
+const verificationLimits = () => ({
+  minImages: setting('verification.minImages'),
+  maxImages: setting('verification.maxImages'),
+});
 
 const VERIFICATION_IMAGE_SELECT = {
   id: true,
@@ -30,8 +36,8 @@ const signVerification = (verification) =>
 
 module.exports = {
   signVerification,
-  MIN_IMAGES,
-  MAX_IMAGES,
+  MAX_IMAGES_CEILING,
+  verificationLimits,
   VERIFICATION_IMAGE_SELECT,
   VERIFICATION_SUBMISSION_SELECT,
 };

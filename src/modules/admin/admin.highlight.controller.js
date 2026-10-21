@@ -3,6 +3,7 @@ const { sendSuccess } = require('../../utils/response');
 const { logAdminAction, quote, userLabel } = require('../../utils/audit');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const highlightService = require('./admin.highlight.service');
+const social = require('../highlight/highlight.social');
 const {
   validateIdParam,
   validateAdminHighlightUpdate,
@@ -131,7 +132,35 @@ const removeMedia = async (req, res, next) => {
   }
 };
 
+const listComments = async (req, res, next) => {
+  try {
+    assertHighlightParam(req);
+    return sendSuccess(res, await social.listComments(null, req.params.highlightId, req.query, { admin: true }));
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteComment = async (req, res, next) => {
+  try {
+    assertHighlightParam(req);
+    const comment = await social.adminDeleteComment(req.params.highlightId, req.params.commentId);
+    logAdminAction(req, AUDIT_ACTIONS.ADMIN_HIGHLIGHT_COMMENT_DELETED, {
+      entityType: ENTITY_TYPES.HIGHLIGHT,
+      entityId: req.params.highlightId,
+      targetUserId: comment.userId,
+      message: `Removed a comment: “${comment.text.slice(0, 80)}”`,
+      metadata: { commentId: comment.id, text: comment.text.slice(0, 500) },
+    });
+    return sendSuccess(res, { deleted: true, message: 'Comment removed' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
+  listComments,
+  deleteComment,
   listHighlights,
   getHighlight,
   updateHighlight,

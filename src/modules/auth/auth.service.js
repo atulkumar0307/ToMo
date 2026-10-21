@@ -1,5 +1,5 @@
 const prisma = require('../../config/database');
-const env = require('../../config/env');
+const { setting } = require('../../services/settings');
 const { AppError } = require('../../utils/errors');
 const {
   generateAccessToken,
@@ -29,14 +29,16 @@ const sendOtp = async (mobile, action) => {
 
   if (existingUser) {
     assertUserNotBlocked(existingUser);
+  } else if (!setting('app.signupsEnabled')) {
+    throw new AppError('New sign-ups are paused right now. Please try again later.', 403);
   }
 
-  const expiresAt = new Date(Date.now() + env.otp.expiryMinutes * 60 * 1000);
+  const expiresAt = new Date(Date.now() + setting('auth.otpExpiryMinutes') * 60 * 1000);
 
   await prisma.otp.create({
     data: {
       mobile: normalizedMobile,
-      otp: env.otp.devOtp,
+      otp: setting('auth.devOtp'),
       action: normalizedAction,
       expiresAt,
     },
@@ -72,7 +74,7 @@ const findValidOtp = async (mobile, action, otp) => {
   if (record.otp !== normalizedOtp) {
     // Each code allows a few guesses; after that it is burned and a new one is needed.
     const attempts = record.attempts + 1;
-    const exhausted = attempts >= env.otp.maxVerifyAttempts;
+    const exhausted = attempts >= setting('auth.otpMaxAttempts');
     await prisma.otp.update({
       where: { id: record.id },
       data: { attempts, ...(exhausted ? { isUsed: true } : {}) },
@@ -97,6 +99,10 @@ const resolveUserAfterLogin = async (mobile) => {
   if (existingUser) {
     assertUserNotBlocked(existingUser);
     return { user: existingUser, isNewUser: false };
+  }
+
+  if (!setting('app.signupsEnabled')) {
+    throw new AppError('New sign-ups are paused right now. Please try again later.', 403);
   }
 
   const user = await prisma.$transaction(async (tx) => {

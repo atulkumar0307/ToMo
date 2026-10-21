@@ -2,8 +2,8 @@ const { AppError } = require('../../utils/errors');
 const { sendSuccess } = require('../../utils/response');
 const { removeUploadPaths } = require('../../utils/uploads');
 const chatService = require('./chat.service');
+const { setting } = require('../../services/settings');
 
-const TEXT_MAX = 1000;
 const CLIENT_ID_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
 
 const validateSend = (body, file) => {
@@ -11,7 +11,8 @@ const validateSend = (body, file) => {
 
   if (body?.text !== undefined && typeof body.text !== 'string') return { error: 'text must be a string' };
   if (!text && !file) return { error: 'Write a message or attach a photo' };
-  if (text.length > TEXT_MAX) return { error: `Messages can be at most ${TEXT_MAX} characters` };
+  const maxLength = setting('chat.maxMessageLength');
+  if (text.length > maxLength) return { error: `Messages can be at most ${maxLength} characters` };
 
   const clientId = body?.clientId === undefined || body.clientId === '' ? null : String(body.clientId);
   if (clientId !== null && !CLIENT_ID_REGEX.test(clientId)) {

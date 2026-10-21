@@ -237,7 +237,10 @@ const withdrawJoinRequest = async (req, res, next) => {
     if (result.left) {
       chatService.postSystemMessage(result.activity.id, `${userLabel(req.user)} left`);
     }
-    realtime.participantUpdated(result.activity, req.userId, result.participantStatus, { notifyHost: true });
+    realtime.participantUpdated(result.activity, req.userId, result.participantStatus, {
+      notifyHost: true,
+      participantName: result.left ? userLabel(req.user) : undefined,
+    });
 
     return sendSuccess(res, {
       ...result,

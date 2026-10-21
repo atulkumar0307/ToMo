@@ -3,7 +3,7 @@
 const { Router } = require('express');
 const { authenticate } = require('../../middleware/auth');
 const authController = require('./auth.controller');
-const env = require('../../config/env');
+const { setting } = require('../../services/settings');
 const { rateLimit, clientIp } = require('../../middleware/rateLimit');
 
 const MINUTE = 60 * 1000;
@@ -12,12 +12,18 @@ const mobileOf = (req) => (typeof req.body?.mobile === 'string' ? req.body.mobil
 const sendOtpLimits = rateLimit([
   {
     name: 'otp-resend',
-    windowMs: env.otp.resendCooldownSeconds * 1000,
+    windowMs: () => setting('auth.otpResendCooldownSeconds') * 1000,
     max: 1,
     key: mobileOf,
-    message: `Please wait ${env.otp.resendCooldownSeconds} seconds before requesting another code.`,
+    message: () => `Please wait ${setting('auth.otpResendCooldownSeconds')} seconds before requesting another code.`,
   },
-  { name: 'otp-mobile-hour', windowMs: 60 * MINUTE, max: 6, key: mobileOf, message: 'Too many codes requested for this number. Try again in an hour.' },
+  {
+    name: 'otp-mobile-hour',
+    windowMs: 60 * MINUTE,
+    max: () => setting('auth.otpPerHourPerNumber'),
+    key: mobileOf,
+    message: 'Too many codes requested for this number. Try again in an hour.',
+  },
   { name: 'otp-ip-hour', windowMs: 60 * MINUTE, max: 300, key: clientIp },
 ]);
 

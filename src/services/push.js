@@ -1,6 +1,7 @@
 const fs = require('fs');
 const env = require('../config/env');
 const prisma = require('../config/database');
+const { setting } = require('./settings');
 
 /**
  * Silent (data-only) Firebase Cloud Messaging.
@@ -121,7 +122,7 @@ const sendToUsers = async (userIds, data, options = {}) => {
 
 /** Fire-and-forget wrapper: push problems never affect the API response. */
 const notifyUsers = (userIds, data, options) => {
-  if (!getMessaging()) return;
+  if (!setting('app.pushEnabled') || !getMessaging()) return;
   setImmediate(() => {
     sendToUsers(userIds, data, options).catch((err) => console.error('Push send failed:', err.message));
   });

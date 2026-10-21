@@ -38,6 +38,8 @@ const HIGHLIGHT_SORTS = {
   newest: { createdAt: 'desc' },
   oldest: { createdAt: 'asc' },
   updated: { updatedAt: 'desc' },
+  mostLiked: [{ likeCount: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+  mostCommented: [{ commentCount: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
 };
 
 const listHighlights = async (query = {}) => {

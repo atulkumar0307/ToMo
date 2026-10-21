@@ -3,12 +3,7 @@ const {
   TITLE_MAX,
   DESCRIPTION_MIN,
   DESCRIPTION_MAX,
-  MIN_PARTICIPANTS,
-  MAX_PARTICIPANTS,
-  MIN_DURATION_MS,
-  MAX_DURATION_MS,
-  MIN_LEAD_TIME_MS,
-  MAX_START_WINDOW_MS,
+  activityLimits,
   ALLOWED_CATEGORIES,
 } = require('./activity.constants');
 
@@ -117,24 +112,32 @@ const validateMaxParticipants = (value) => {
 
   const parsed = typeof value === 'number' ? value : parseInt(value, 10);
 
-  if (Number.isNaN(parsed) || parsed < MIN_PARTICIPANTS || parsed > MAX_PARTICIPANTS) {
-    return `Maximum participants must be between ${MIN_PARTICIPANTS} and ${MAX_PARTICIPANTS}`;
+  const { minParticipants, maxParticipants } = activityLimits();
+  if (Number.isNaN(parsed) || parsed < minParticipants || parsed > maxParticipants) {
+    return `Maximum participants must be between ${minParticipants} and ${maxParticipants}`;
   }
 
   return null;
 };
 
+const humanMinutes = (minutes) => {
+  if (minutes % (24 * 60) === 0 && minutes >= 48 * 60) return `${minutes / (24 * 60)} days`;
+  if (minutes % 60 === 0 && minutes >= 60) return `${minutes / 60} hour${minutes === 60 ? '' : 's'}`;
+  return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+};
+
 const validateActivityTimes = (startTime, endTime) => {
+  const limits = activityLimits();
   const now = new Date();
-  const minStart = new Date(now.getTime() + MIN_LEAD_TIME_MS);
-  const maxStart = new Date(now.getTime() + MAX_START_WINDOW_MS);
+  const minStart = new Date(now.getTime() + limits.minLeadMs);
+  const maxStart = new Date(now.getTime() + limits.maxStartWindowMs);
 
   if (startTime < minStart) {
-    return 'Start time must be at least 30 minutes from now';
+    return `Start time must be at least ${humanMinutes(limits.minLeadMs / 60000)} from now`;
   }
 
   if (startTime > maxStart) {
-    return 'Start time must be within 24 hours from now';
+    return `Start time must be within ${humanMinutes(limits.maxStartWindowMs / 60000)} from now`;
   }
 
   if (endTime <= startTime) {
@@ -143,12 +146,12 @@ const validateActivityTimes = (startTime, endTime) => {
 
   const durationMs = endTime.getTime() - startTime.getTime();
 
-  if (durationMs < MIN_DURATION_MS) {
-    return 'Activity duration must be at least 30 minutes';
+  if (durationMs < limits.minDurationMs) {
+    return `Activity duration must be at least ${humanMinutes(limits.minDurationMs / 60000)}`;
   }
 
-  if (durationMs > MAX_DURATION_MS) {
-    return 'Activity duration must be at most 8 hours';
+  if (durationMs > limits.maxDurationMs) {
+    return `Activity duration must be at most ${humanMinutes(limits.maxDurationMs / 60000)}`;
   }
 
   return null;

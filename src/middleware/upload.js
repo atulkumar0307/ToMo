@@ -12,7 +12,8 @@ const VERIFICATION_IMAGES_DIR = path.join(
 const HIGHLIGHTS_DIR = path.join(__dirname, '../../uploads/highlights');
 const CHAT_IMAGES_DIR = path.join(__dirname, '../../uploads/chat-images');
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-const MAX_HIGHLIGHT_MEDIA_SIZE = 50 * 1024 * 1024;
+// Hard ceiling for one highlight file; the configured photo/video limits are checked after upload.
+const MAX_HIGHLIGHT_MEDIA_SIZE = 200 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
 const ALLOWED_HIGHLIGHT_MIME_TYPES = [

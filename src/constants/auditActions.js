@@ -33,6 +33,10 @@ const AUDIT_ACTIONS = {
   HIGHLIGHT_CREATED: 'HIGHLIGHT_CREATED',
   HIGHLIGHT_UPDATED: 'HIGHLIGHT_UPDATED',
   HIGHLIGHT_DELETED: 'HIGHLIGHT_DELETED',
+  HIGHLIGHT_LIKED: 'HIGHLIGHT_LIKED',
+  HIGHLIGHT_UNLIKED: 'HIGHLIGHT_UNLIKED',
+  HIGHLIGHT_COMMENTED: 'HIGHLIGHT_COMMENTED',
+  HIGHLIGHT_COMMENT_DELETED: 'HIGHLIGHT_COMMENT_DELETED',
 
   // Admin — session & admin accounts
   ADMIN_LOGIN: 'ADMIN_LOGIN',
@@ -69,9 +73,13 @@ const AUDIT_ACTIONS = {
   ADMIN_HIGHLIGHT_UPDATED: 'ADMIN_HIGHLIGHT_UPDATED',
   ADMIN_HIGHLIGHT_DELETED: 'ADMIN_HIGHLIGHT_DELETED',
   ADMIN_HIGHLIGHT_MEDIA_REMOVED: 'ADMIN_HIGHLIGHT_MEDIA_REMOVED',
+  ADMIN_HIGHLIGHT_COMMENT_DELETED: 'ADMIN_HIGHLIGHT_COMMENT_DELETED',
 
   // Admin — chat moderation
   ADMIN_CHAT_MESSAGE_DELETED: 'ADMIN_CHAT_MESSAGE_DELETED',
+
+  // Admin — configuration
+  ADMIN_CONFIG_UPDATED: 'ADMIN_CONFIG_UPDATED',
 };
 
 const ENTITY_TYPES = {
@@ -106,6 +114,10 @@ const AUDIT_ACTION_CATALOG = [
   { action: AUDIT_ACTIONS.HIGHLIGHT_CREATED, label: 'Highlight posted', group: 'Highlights' },
   { action: AUDIT_ACTIONS.HIGHLIGHT_UPDATED, label: 'Highlight edited', group: 'Highlights' },
   { action: AUDIT_ACTIONS.HIGHLIGHT_DELETED, label: 'Highlight deleted', group: 'Highlights' },
+  { action: AUDIT_ACTIONS.HIGHLIGHT_LIKED, label: 'Highlight liked', group: 'Highlights' },
+  { action: AUDIT_ACTIONS.HIGHLIGHT_UNLIKED, label: 'Highlight unliked', group: 'Highlights' },
+  { action: AUDIT_ACTIONS.HIGHLIGHT_COMMENTED, label: 'Comment posted', group: 'Highlights' },
+  { action: AUDIT_ACTIONS.HIGHLIGHT_COMMENT_DELETED, label: 'Comment deleted', group: 'Highlights' },
   { action: AUDIT_ACTIONS.ADMIN_LOGIN, label: 'Admin logged in', group: 'Admin' },
   { action: AUDIT_ACTIONS.ADMIN_LOGOUT, label: 'Admin logged out', group: 'Admin' },
   { action: AUDIT_ACTIONS.ADMIN_REGISTERED, label: 'First admin registered', group: 'Admin' },
@@ -132,7 +144,9 @@ const AUDIT_ACTION_CATALOG = [
   { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_UPDATED, label: 'Highlight edited by admin', group: 'Admin · Highlights' },
   { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_DELETED, label: 'Highlight deleted by admin', group: 'Admin · Highlights' },
   { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_MEDIA_REMOVED, label: 'Highlight media removed', group: 'Admin · Highlights' },
+  { action: AUDIT_ACTIONS.ADMIN_HIGHLIGHT_COMMENT_DELETED, label: 'Comment removed by admin', group: 'Admin · Highlights' },
   { action: AUDIT_ACTIONS.ADMIN_CHAT_MESSAGE_DELETED, label: 'Chat message removed', group: 'Admin · Chat' },
+  { action: AUDIT_ACTIONS.ADMIN_CONFIG_UPDATED, label: 'Configuration changed', group: 'Admin' },
 ];
 
 module.exports = {

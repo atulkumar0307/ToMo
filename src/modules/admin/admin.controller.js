@@ -5,6 +5,8 @@ const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const adminAuthService = require('./admin.auth.service');
 const dashboardService = require('./admin.dashboard.service');
 const logService = require('./admin.log.service');
+const settingsService = require('../../services/settings');
+const { SETTINGS } = require('../../config/settings.registry');
 const {
   validateAdminRegister,
   validateAdminLogin,
@@ -266,6 +268,60 @@ const listLogs = async (req, res, next) => {
 
 const getLogActions = async (req, res) => sendSuccess(res, logService.getActionCatalog());
 
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+
+const SENSITIVE = new Set(SETTINGS.filter((def) => def.sensitive).map((def) => def.key));
+const LABELS = Object.fromEntries(SETTINGS.map((def) => [def.key, def.label]));
+const mask = (key, value) => (SENSITIVE.has(key) ? '••••••' : value);
+
+const logConfigChanges = (req, changes, verb) => {
+  if (!changes.length) return;
+  logAdminAction(req, AUDIT_ACTIONS.ADMIN_CONFIG_UPDATED, {
+    entityType: ENTITY_TYPES.ADMIN,
+    entityId: req.adminId,
+    message: `${verb} configuration: ${changes
+      .map((c) => `${LABELS[c.key]} ${mask(c.key, c.from)} → ${mask(c.key, c.to)}`)
+      .join('; ')
+      .slice(0, 900)}`,
+    metadata: { changes: changes.map((c) => ({ key: c.key, from: mask(c.key, c.from), to: mask(c.key, c.to) })) },
+  });
+};
+
+const getConfig = async (req, res) => sendSuccess(res, settingsService.listSettings());
+
+const updateConfig = async (req, res, next) => {
+  try {
+    const changes = await settingsService.updateSettings(req.body?.values, req.adminId);
+    logConfigChanges(req, changes, 'Changed');
+    return sendSuccess(res, {
+      ...settingsService.listSettings(),
+      changed: changes.map((c) => c.key),
+      message: changes.length ? `Saved ${changes.length} change${changes.length === 1 ? '' : 's'}` : 'Nothing changed',
+    });
+  } catch (err) {
+    if (err instanceof settingsService.SettingsError) return next(new AppError(err.message, err.statusCode));
+    next(err);
+  }
+};
+
+const resetConfig = async (req, res, next) => {
+  try {
+    const keys = Array.isArray(req.body?.keys) ? req.body.keys : null;
+    const changes = await settingsService.resetSettings(keys, req.adminId);
+    logConfigChanges(req, changes, 'Reset');
+    return sendSuccess(res, {
+      ...settingsService.listSettings(),
+      changed: changes.map((c) => c.key),
+      message: changes.length ? 'Restored defaults' : 'Already using defaults',
+    });
+  } catch (err) {
+    if (err instanceof settingsService.SettingsError) return next(new AppError(err.message, err.statusCode));
+    next(err);
+  }
+};
+
 module.exports = {
   setupStatus,
   register,
@@ -282,4 +338,7 @@ module.exports = {
   getDashboard,
   listLogs,
   getLogActions,
+  getConfig,
+  updateConfig,
+  resetConfig,
 };

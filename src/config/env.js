@@ -14,11 +14,6 @@ for (const key of required) {
   }
 }
 
-const intOr = (value, fallback) => {
-  const parsed = parseInt(value, 10);
-  return Number.isNaN(parsed) ? fallback : parsed;
-};
-
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT, 10) || 3000,
@@ -26,28 +21,9 @@ const env = {
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
-    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
-  otp: {
-    expiryMinutes: parseInt(process.env.OTP_EXPIRY_MINUTES, 10) || 10,
-    devOtp: process.env.DEV_OTP || '000000',
-    maxVerifyAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS, 10) || 5,
-    resendCooldownSeconds: parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS, 10) || 30,
-  },
-  activity: {
-    // How early before its start time a host may start an activity.
-    startEarlyMinutes: intOr(process.env.ACTIVITY_START_EARLY_MINUTES, 60),
-    // A started activity is completed automatically this long after its end time.
-    autoCompleteGraceMinutes: intOr(process.env.ACTIVITY_AUTO_COMPLETE_GRACE_MINUTES, 60),
-  },
-  chat: {
-    // Members can still message for this long after a completed activity ends.
-    afterEndHours: intOr(process.env.CHAT_AFTER_END_HOURS, 24),
-  },
-  retention: {
-    auditLogDays: intOr(process.env.AUDIT_LOG_RETENTION_DAYS, 180),
-  },
+  // OTP, activity, chat, highlight and retention rules are runtime settings:
+  // see src/config/settings.registry.js (admin panel → Configuration).
   firebase: {
     // Service account JSON (raw or base64). Empty disables push notifications.
     serviceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || '',

@@ -4,6 +4,7 @@ const { logUserAction, quote } = require('../../utils/audit');
 const { AUDIT_ACTIONS, ENTITY_TYPES } = require('../../constants/auditActions');
 const highlightService = require('./highlight.service');
 const realtime = require('../../services/realtime');
+const social = require('./highlight.social');
 const {
   validateCreateHighlight,
   validateUpdateHighlight,
@@ -174,7 +175,79 @@ const listMyHighlights = async (req, res, next) => {
   }
 };
 
+const logSocial = (req, action, highlight, message, metadata = {}) =>
+  logUserAction(req, action, {
+    entityType: ENTITY_TYPES.HIGHLIGHT,
+    entityId: highlight.id,
+    targetUserId: highlight.userId,
+    message,
+    metadata: { highlightId: highlight.id, activityId: highlight.activityId, title: highlight.title, ...metadata },
+  });
+
+const likeHighlight = async (req, res, next) => {
+  try {
+    const { highlight, created, ...result } = await social.like(req.user, req.params.highlightId);
+    if (created) logSocial(req, AUDIT_ACTIONS.HIGHLIGHT_LIKED, highlight, `Liked highlight ${quote(highlight.title)}`);
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const unlikeHighlight = async (req, res, next) => {
+  try {
+    const { highlight, removed, ...result } = await social.unlike(req.user, req.params.highlightId);
+    if (removed) logSocial(req, AUDIT_ACTIONS.HIGHLIGHT_UNLIKED, highlight, `Unliked highlight ${quote(highlight.title)}`);
+    return sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const listComments = async (req, res, next) => {
+  try {
+    return sendSuccess(res, await social.listComments(req.userId, req.params.highlightId, req.query));
+  } catch (err) {
+    next(err);
+  }
+};
+
+const addComment = async (req, res, next) => {
+  try {
+    const { comment, duplicate, highlight } = await social.addComment(req.user, req.params.highlightId, req.body);
+    if (!duplicate) {
+      logSocial(req, AUDIT_ACTIONS.HIGHLIGHT_COMMENTED, highlight, `Commented on ${quote(highlight.title)}: “${comment.text.slice(0, 80)}”`, {
+        commentId: comment.id,
+      });
+    }
+    return sendSuccess(res, { comment, duplicate }, duplicate ? 200 : 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteComment = async (req, res, next) => {
+  try {
+    const { comment, highlight } = await social.deleteComment(req.user, req.params.highlightId, req.params.commentId);
+    logSocial(
+      req,
+      AUDIT_ACTIONS.HIGHLIGHT_COMMENT_DELETED,
+      highlight,
+      comment.userId === req.userId ? `Deleted own comment on ${quote(highlight.title)}` : `Removed a comment on ${quote(highlight.title)}`,
+      { commentId: comment.id, text: comment.text.slice(0, 300) }
+    );
+    return sendSuccess(res, { deleted: true });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
+  likeHighlight,
+  unlikeHighlight,
+  listComments,
+  addComment,
+  deleteComment,
   createHighlight,
   listActivityHighlights,
   getHighlight,

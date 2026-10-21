@@ -2,8 +2,9 @@ const { Router } = require('express');
 const { authenticate } = require('../../middleware/auth');
 const { uploadHighlightMedia, uploadChatImage } = require('../../middleware/upload');
 const { rateLimit } = require('../../middleware/rateLimit');
+const { setting } = require('../../services/settings');
 const chatController = require('../chat/chat.controller');
-const { MAX_MEDIA } = require('../highlight/highlight.constants');
+const { MAX_MEDIA_CEILING } = require('../highlight/highlight.constants');
 const highlightController = require('../highlight/highlight.controller');
 const activityController = require('./activity.controller');
 
@@ -13,7 +14,13 @@ router.use(authenticate);
 
 // Anti-spam: per user, independent of IP.
 const chatSendLimit = rateLimit([
-  { name: 'chat-send', windowMs: 60 * 1000, max: 30, key: (req) => req.userId, message: 'You are sending messages too fast. Slow down a little.' },
+  {
+    name: 'chat-send',
+    windowMs: 60 * 1000,
+    max: () => setting('chat.messagesPerMinute'),
+    key: (req) => req.userId,
+    message: 'You are sending messages too fast. Slow down a little.',
+  },
 ]);
 
 router.get('/mine/hosted', activityController.listHosted);
@@ -27,7 +34,8 @@ router.post('/:id/participants/:userId/approve', activityController.approveParti
 router.post('/:id/participants/:userId/reject', activityController.rejectParticipant);
 router.post(
   '/:activityId/highlights',
-  uploadHighlightMedia.array('media', MAX_MEDIA),
+  // Hard ceiling here; the configured limit is checked in the validation.
+  uploadHighlightMedia.array('media', MAX_MEDIA_CEILING),
   highlightController.createHighlight
 );
 router.get('/:activityId/highlights', highlightController.listActivityHighlights);

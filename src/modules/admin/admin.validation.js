@@ -18,8 +18,7 @@ const {
   TITLE_MAX,
   DESCRIPTION_MIN,
   DESCRIPTION_MAX,
-  MIN_PARTICIPANTS,
-  MAX_PARTICIPANTS,
+  activityLimits,
 } = require('../activity/activity.constants');
 const {
   TITLE_MAX: HIGHLIGHT_TITLE_MAX,
@@ -524,9 +523,10 @@ const validateAdminActivityUpdate = (body) => {
       typeof body.maxParticipants === 'number'
         ? body.maxParticipants
         : parseInt(body.maxParticipants, 10);
-    if (Number.isNaN(parsed) || parsed < MIN_PARTICIPANTS || parsed > MAX_PARTICIPANTS) {
+    const { minParticipants, maxParticipants } = activityLimits();
+    if (Number.isNaN(parsed) || parsed < minParticipants || parsed > maxParticipants) {
       return {
-        error: `Maximum participants must be between ${MIN_PARTICIPANTS} and ${MAX_PARTICIPANTS}`,
+        error: `Maximum participants must be between ${minParticipants} and ${maxParticipants}`,
       };
     }
     data.maxParticipants = parsed;

@@ -1,14 +1,13 @@
 const { ActivityStatus, ParticipantStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
-const env = require('../../config/env');
+const { setting } = require('../../services/settings');
 const { AppError } = require('../../utils/errors');
 const {
   ACTIVITY_SELECT,
   DISCOVERY_STATUSES,
   JOINER_SCHEDULE_BLOCKING_STATUSES,
   HOST_SCHEDULE_BLOCKING_STATUSES,
-  MIN_LEAD_TIME_MS,
-  MAX_START_WINDOW_MS,
+  activityLimits,
   PARTICIPANT_SELECT,
 } = require('./activity.constants');
 const { getNextActivityAid, formatActivityCode } = require('../../utils/activityAid');
@@ -377,7 +376,7 @@ const cancelActivity = async (hostId, activityId) => {
 
 /** Earliest moment the host may press Start. */
 const earliestStartOf = (activity) =>
-  new Date(activity.startTime.getTime() - env.activity.startEarlyMinutes * MINUTE_MS);
+  new Date(activity.startTime.getTime() - setting('activity.startEarlyMinutes') * MINUTE_MS);
 
 const startActivity = async (hostId, activityId) => {
   const activity = await fetchActivityForHost(activityId, hostId);
@@ -395,7 +394,7 @@ const startActivity = async (hostId, activityId) => {
   if (now < earliestStartOf(activity)) {
     const minutes = Math.ceil((earliestStartOf(activity) - now) / MINUTE_MS);
     throw new AppError(
-      `Too early to start: you can start up to ${env.activity.startEarlyMinutes} minutes before the start time (in ${minutes} min).`,
+      `Too early to start: you can start up to ${setting('activity.startEarlyMinutes')} minutes before the start time (in ${minutes} min).`,
       400
     );
   }
@@ -692,8 +691,9 @@ const distanceKm = (lat1, lng1, lat2, lng2) => {
 
 const buildDiscoveryWhere = (filters) => {
   const now = new Date();
-  const minStart = new Date(now.getTime() + MIN_LEAD_TIME_MS);
-  const maxStart = new Date(now.getTime() + MAX_START_WINDOW_MS);
+  const { minLeadMs, maxStartWindowMs } = activityLimits();
+  const minStart = new Date(now.getTime() + minLeadMs);
+  const maxStart = new Date(now.getTime() + maxStartWindowMs);
 
   const where = {
     status: { in: DISCOVERY_STATUSES },
@@ -932,7 +932,7 @@ const expireUnstartedActivities = async () => {
  * while after their end time, so members can post highlights. Returns the affected rows.
  */
 const autoCompleteActivities = async () => {
-  const cutoff = new Date(Date.now() - env.activity.autoCompleteGraceMinutes * MINUTE_MS);
+  const cutoff = new Date(Date.now() - setting('activity.autoCompleteGraceMinutes') * MINUTE_MS);
 
   const overdue = await prisma.activity.findMany({
     where: { status: ActivityStatus.ACTIVE, endTime: { lt: cutoff } },

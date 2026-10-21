@@ -1,15 +1,23 @@
 const { HighlightStatus } = require('@prisma/client');
+const { setting } = require('../../services/settings');
 
 const TITLE_MAX = 150;
 const CAPTION_MAX = 300;
 const DESCRIPTION_MAX = 1000;
 const MIN_MEDIA = 1;
-const MAX_MEDIA = 7;
+/** Upload hard ceiling; the live limit is `highlightLimits().maxMedia`. */
+const MAX_MEDIA_CEILING = 20;
 const MAX_TAGS = 20;
 const MAX_TAG_LENGTH = 50;
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
-const MAX_VIDEO_DURATION_SECONDS = 40;
+const MB = 1024 * 1024;
+
+/** Editable in admin → Configuration; read per request. */
+const highlightLimits = () => ({
+  maxMedia: setting('highlight.maxMedia'),
+  maxImageBytes: setting('highlight.maxImageMb') * MB,
+  maxVideoBytes: setting('highlight.maxVideoMb') * MB,
+  maxVideoSeconds: setting('highlight.maxVideoSeconds'),
+});
 
 const ALLOWED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const ALLOWED_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime', 'video/webm'];
@@ -44,6 +52,8 @@ const HIGHLIGHT_SELECT = {
   description: true,
   tags: true,
   status: true,
+  likeCount: true,
+  commentCount: true,
   createdAt: true,
   updatedAt: true,
   user: {
@@ -81,12 +91,10 @@ module.exports = {
   CAPTION_MAX,
   DESCRIPTION_MAX,
   MIN_MEDIA,
-  MAX_MEDIA,
+  MAX_MEDIA_CEILING,
+  highlightLimits,
   MAX_TAGS,
   MAX_TAG_LENGTH,
-  MAX_IMAGE_SIZE,
-  MAX_VIDEO_SIZE,
-  MAX_VIDEO_DURATION_SECONDS,
   ALLOWED_IMAGE_MIME_TYPES,
   ALLOWED_VIDEO_MIME_TYPES,
   PAST_ACTIVITY_STATUSES,

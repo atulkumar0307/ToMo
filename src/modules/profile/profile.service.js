@@ -1,7 +1,7 @@
 const prisma = require('../../config/database');
 const { AppError } = require('../../utils/errors');
 const { USER_SELECT } = require('../../constants/userSelect');
-const { VERIFIED_FIELD_COOLDOWN_MS } = require('./profile.constants');
+const { verifiedFieldCooldownMs } = require('./profile.constants');
 const { invalidateUser } = require('../../utils/userCache');
 const { removeUploadPaths } = require('../../utils/uploads');
 
@@ -21,7 +21,7 @@ const isSameDate = (a, b) => {
 
 const getDaysUntilCooldownEnds = (lastUpdatedAt) => {
   const elapsed = Date.now() - lastUpdatedAt.getTime();
-  return Math.ceil((VERIFIED_FIELD_COOLDOWN_MS - elapsed) / (24 * 60 * 60 * 1000));
+  return Math.ceil((verifiedFieldCooldownMs() - elapsed) / (24 * 60 * 60 * 1000));
 };
 
 const assertFieldCooldown = (lastUpdatedAt, fieldLabel) => {
@@ -31,10 +31,10 @@ const assertFieldCooldown = (lastUpdatedAt, fieldLabel) => {
 
   const elapsed = Date.now() - lastUpdatedAt.getTime();
 
-  if (elapsed < VERIFIED_FIELD_COOLDOWN_MS) {
+  if (elapsed < verifiedFieldCooldownMs()) {
     const daysLeft = getDaysUntilCooldownEnds(lastUpdatedAt);
     throw new AppError(
-      `${fieldLabel} can only be changed once every 2 weeks. Try again in ${daysLeft} day(s).`,
+      `${fieldLabel} can only be changed once every ${Math.round(verifiedFieldCooldownMs() / 86400000)} days. Try again in ${daysLeft} day(s).`,
       403
     );
   }

@@ -12,9 +12,7 @@ const {
   LIST_HIGHLIGHT_STATUSES,
   ALLOWED_IMAGE_MIME_TYPES,
   ALLOWED_VIDEO_MIME_TYPES,
-  MAX_IMAGE_SIZE,
-  MAX_VIDEO_SIZE,
-  MAX_VIDEO_DURATION_SECONDS,
+  highlightLimits,
 } = require('./highlight.constants');
 
 const removeUploadedFiles = (files = []) => {
@@ -43,6 +41,9 @@ const formatHighlight = (highlight) => ({
   description: highlight.description,
   tags: highlight.tags,
   status: highlight.status,
+  likeCount: highlight.likeCount ?? 0,
+  commentCount: highlight.commentCount ?? 0,
+  likedByMe: false,
   createdAt: highlight.createdAt,
   updatedAt: highlight.updatedAt,
   mediaItems: highlight.mediaItems.map(formatMediaItem),
@@ -56,6 +57,17 @@ const formatHighlight = (highlight) => ({
     ? { activity: { ...highlight.activity, activityCode: formatActivityCode(highlight.activity.aid) } }
     : {}),
 });
+
+/** Sets `likedByMe` for the viewer on already formatted highlights (one query per page). */
+const withViewerLikes = async (highlights, viewerId) => {
+  if (!viewerId || !highlights.length) return highlights;
+  const liked = await prisma.highlightLike.findMany({
+    where: { userId: viewerId, highlightId: { in: highlights.map((h) => h.id) } },
+    select: { highlightId: true },
+  });
+  const set = new Set(liked.map((l) => l.highlightId));
+  return highlights.map((h) => ({ ...h, likedByMe: set.has(h.id) }));
+};
 
 const fetchActivityOrThrow = async (activityId) => {
   const activity = await prisma.activity.findUnique({
@@ -182,7 +194,8 @@ const assertCanViewActivityHighlights = async (activityId, userId) => {
 const validateMediaFileSizes = (files) => {
   for (const file of files) {
     const isImage = ALLOWED_IMAGE_MIME_TYPES.includes(file.mimetype);
-    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_VIDEO_SIZE;
+    const limits = highlightLimits();
+    const maxSize = isImage ? limits.maxImageBytes : limits.maxVideoBytes;
 
     if (file.size > maxSize) {
       const limitMb = maxSize / (1024 * 1024);
@@ -216,9 +229,10 @@ const buildMediaRecords = async (files, mediaOrder) => {
         throw new AppError('Could not read video duration', 400);
       }
 
-      if (durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
+      const { maxVideoSeconds } = highlightLimits();
+      if (durationSeconds > maxVideoSeconds) {
         throw new AppError(
-          `Video must be at most ${MAX_VIDEO_DURATION_SECONDS} seconds`,
+          `Video must be at most ${maxVideoSeconds} seconds`,
           400
         );
       }
@@ -331,7 +345,7 @@ const listActivityHighlights = async (userId, activityId, { page, limit }) => {
   ]);
 
   return {
-    highlights: highlights.map(formatHighlight),
+    highlights: await withViewerLikes(highlights.map(formatHighlight), userId),
     pagination: {
       page,
       limit,
@@ -353,7 +367,7 @@ const getHighlightById = async (userId, highlightId) => {
 
   await assertCanViewActivityHighlights(highlight.activityId, userId);
 
-  return formatHighlight(highlight);
+  return (await withViewerLikes([formatHighlight(highlight)], userId))[0];
 };
 
 const updateHighlight = async (userId, highlightId, data) => {
@@ -411,7 +425,7 @@ const listMyHighlights = async (userId, { page, limit }) => {
   ]);
 
   return {
-    highlights: highlights.map(formatHighlight),
+    highlights: await withViewerLikes(highlights.map(formatHighlight), userId),
     pagination: {
       page,
       limit,
@@ -441,7 +455,7 @@ const listFeedHighlights = async (userId, { page, limit }) => {
   ]);
 
   return {
-    highlights: highlights.map(formatHighlight),
+    highlights: await withViewerLikes(highlights.map(formatHighlight), userId),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) || 1 },
   };
 };
@@ -456,6 +470,10 @@ const countPublishedHighlights = async (activityId) => {
 };
 
 module.exports = {
+  assertCanViewActivityHighlights,
+  fetchPublishedHighlightOrThrow,
+  withViewerLikes,
+  formatHighlight,
   createHighlight,
   listActivityHighlights,
   getHighlightById,

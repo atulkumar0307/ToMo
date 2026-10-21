@@ -1,6 +1,6 @@
 const { ActivityStatus, ChatMessageType, ParticipantStatus } = require('@prisma/client');
 const prisma = require('../../config/database');
-const env = require('../../config/env');
+const { setting } = require('../../services/settings');
 const { AppError } = require('../../utils/errors');
 const { formatActivityCode } = require('../../utils/activityAid');
 const { removeUploadPaths } = require('../../utils/uploads');
@@ -56,7 +56,7 @@ const formatMessage = (message, viewerId) => ({
 const canSendIn = (activity, now = new Date()) => {
   if ([ActivityStatus.PUBLISHED, ActivityStatus.ACTIVE].includes(activity.status)) return true;
   if (activity.status === ActivityStatus.COMPLETED) {
-    return now.getTime() < activity.endTime.getTime() + env.chat.afterEndHours * 60 * 60 * 1000;
+    return now.getTime() < activity.endTime.getTime() + setting('chat.afterEndHours') * 60 * 60 * 1000;
   }
   return false;
 };
@@ -183,7 +183,7 @@ const sendMessage = async (sender, activityId, { text, clientId }, file) => {
     await assertMember(activity, sender.id);
 
     if (!canSendIn(activity)) {
-      throw new AppError('This chat is closed. Messages can be sent until 24 hours after the activity ends.', 403);
+      throw new AppError(`This chat is closed. Messages can be sent until ${setting('chat.afterEndHours')} hours after the activity ends.`, 403);
     }
 
     if (clientId) {

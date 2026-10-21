@@ -269,7 +269,10 @@ const changeParticipantStatus = async (req, res, next) => {
     } else if (result.previousStatus === 'APPROVED') {
       chatService.postSystemMessage(result.activity.id, `${userLabel(result.participant.user)} left`);
     }
-    realtime.participantUpdated(result.activity, req.params.userId, result.participant.status, { notifyHost: true });
+    realtime.participantUpdated(result.activity, req.params.userId, result.participant.status, {
+      notifyHost: true,
+      participantName: result.previousStatus === 'APPROVED' ? userLabel(result.participant.user) : undefined,
+    });
 
     logAdminAction(req, AUDIT_ACTIONS.ADMIN_PARTICIPANT_STATUS_CHANGED, {
       entityType: ENTITY_TYPES.ACTIVITY,

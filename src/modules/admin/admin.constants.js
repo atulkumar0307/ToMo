@@ -95,6 +95,8 @@ const ADMIN_HIGHLIGHT_SELECT = {
   description: true,
   tags: true,
   status: true,
+  likeCount: true,
+  commentCount: true,
   createdAt: true,
   updatedAt: true,
   user: {
