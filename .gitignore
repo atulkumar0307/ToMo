@@ -13,3 +13,6 @@ uploads/highlights/*
 .local-pg/
 uploads/chat-images/*
 firebase-service-account*.json
+
+# Admin panel build (deployed manually, not versioned)
+admin/build/
